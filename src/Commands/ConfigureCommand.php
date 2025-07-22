@@ -307,7 +307,7 @@ class ConfigureCommand extends BaseCommand {
      */
     private function update_urls($assoc_args) {
         $new_url = $assoc_args['url'];
-        $old_url = 'https://protools.lndo.site';
+        $old_url = 'https://basecamp-dev.lndo.site';
         
         $this->run_wp_command("search-replace '$old_url' '$new_url' --all-tables");
     }

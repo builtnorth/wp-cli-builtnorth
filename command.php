@@ -10,8 +10,10 @@ if (!class_exists('WP_CLI')) {
 }
 
 use BuiltNorth\CLI\Commands\SetupCommand;
+use BuiltNorth\CLI\Commands\SetupBnProjectCommand;
 use BuiltNorth\CLI\Commands\ConfigureCommand;
 use BuiltNorth\CLI\Commands\GenerateCommand;
+use BuiltNorth\CLI\Commands\PostTypeSwitchCommand;
 
 // Only register if not already registered
 if (!class_exists('BuiltNorth_Command')) {
@@ -35,7 +37,35 @@ if (!class_exists('BuiltNorth_Command')) {
     class BuiltNorth_Command extends WP_CLI_Command {
         
         /**
-         * Initialize a new BuiltNorth project
+         * Standard WordPress project setup
+         *
+         * ## OPTIONS
+         *
+         * [--name=<name>]
+         * : Project name
+         *
+         * [--username=<username>]
+         * : WordPress admin username
+         *
+         * [--password=<password>]
+         * : WordPress admin password
+         *
+         * [--email=<email>]
+         * : WordPress admin email
+         *
+         * ## EXAMPLES
+         *
+         *     wp builtnorth setup --name="My Project" --email="admin@example.com" --password="secure123"
+         *
+         * @when before_wp_load
+         */
+        public function setup($args, $assoc_args) {
+            $command = new SetupCommand();
+            $command->__invoke($args, $assoc_args);
+        }
+        
+        /**
+         * Initialize a BuiltNorth-specific project with Compass theme
          *
          * ## OPTIONS
          *
@@ -59,13 +89,14 @@ if (!class_exists('BuiltNorth_Command')) {
          *
          * ## EXAMPLES
          *
-         *     wp builtnorth setup --name="My Project"
-         *     wp builtnorth setup --name="My Project" --yes
+         *     wp builtnorth setup-bn-project --name="My Project"
+         *     wp builtnorth setup-bn-project --name="My Project" --yes
          *
          * @when before_wp_load
+         * @subcommand setup-bn-project
          */
-        public function setup($args, $assoc_args) {
-            $command = new SetupCommand();
+        public function setup_bn_project($args, $assoc_args) {
+            $command = new SetupBnProjectCommand();
             $command->__invoke($args, $assoc_args);
         }
         
@@ -135,6 +166,45 @@ if (!class_exists('BuiltNorth_Command')) {
          */
         public function generate($args, $assoc_args) {
             $command = new GenerateCommand();
+            $command->__invoke($args, $assoc_args);
+        }
+        
+        /**
+         * Convert posts from one post type to another
+         *
+         * ## OPTIONS
+         *
+         * --from=<post-type>
+         * : The source post type
+         *
+         * --to=<post-type>
+         * : The target post type
+         *
+         * [--status=<status>]
+         * : Only convert posts with this status (default: any)
+         *
+         * [--limit=<number>]
+         * : Limit the number of posts to convert
+         *
+         * [--dry-run]
+         * : Preview what would be changed without making changes
+         *
+         * [--include-taxonomies]
+         * : Attempt to map taxonomies between post types
+         *
+         * [--yes]
+         * : Skip confirmation prompt
+         *
+         * ## EXAMPLES
+         *
+         *     wp builtnorth post-type-switch --from=post --to=article
+         *     wp builtnorth post-type-switch --from=post --to=news --dry-run
+         *
+         * @when after_wp_load
+         * @subcommand post-type-switch
+         */
+        public function post_type_switch($args, $assoc_args) {
+            $command = new PostTypeSwitchCommand();
             $command->__invoke($args, $assoc_args);
         }
     }
