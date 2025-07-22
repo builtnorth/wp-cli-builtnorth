@@ -77,7 +77,8 @@ class ConfigureCommand extends BaseCommand {
                 WP_CLI::line("  - Replace URLs in database with: {$assoc_args['url']}");
             }
             
-            WP_CLI::line('  - Activate theme and all plugins');
+            WP_CLI::line('  - Activate compass theme (if available)');
+            WP_CLI::line('  - Activate all plugins');
             WP_CLI::line('  - Update WordPress settings and permalinks');
             
             WP_CLI::line('');
@@ -142,7 +143,7 @@ class ConfigureCommand extends BaseCommand {
      * Activate theme
      */
     private function activate_theme($assoc_args) {
-        $theme = 'compass-directory';
+        $theme = 'compass';
         
         if (wp_get_theme($theme)->exists()) {
             $this->run_wp_command("theme activate $theme");

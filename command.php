@@ -1,7 +1,8 @@
 <?php
-
 /**
  * BuiltNorth WP-CLI Command Registration
+ * 
+ * @package BuiltNorth\CLI
  */
 
 if (!class_exists('WP_CLI')) {
