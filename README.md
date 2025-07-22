@@ -10,22 +10,41 @@ wp package install builtnorth/wp-cli-builtnorth
 
 ## Commands
 
-### Setup
-Initialize a new BuiltNorth project with comprehensive configuration:
+### Setup (Standard)
+Standard WordPress project setup:
 
 ```bash
 wp builtnorth setup --name="My Project" --email="admin@example.com" --password="secure123"
 ```
 
-The setup command now includes:
-- **Complete WordPress installation** with database reset for existing installations
+This command provides:
+- **WordPress installation** with database management
+- **Theme handling** - Installs from composer, setup/data/themes, or default WordPress themes
+- **Plugin activation** - Activates all available plugins
+- **Content import** - Imports from setup/data/content/*.xml
+- **Media import** - Imports with automatic logo/icon detection
+- **Settings configuration** - Timezone, permalinks, upload settings
+- **Page setup** - Configures home and blog pages if found
+
+Options:
+- `--name=<name>` - Project name (required)
+- `--username=<username>` - WordPress admin username (default: admin)
+- `--password=<password>` - WordPress admin password (required)
+- `--email=<email>` - WordPress admin email (required)
+
+### Setup BN Project
+BuiltNorth-specific project setup with Compass theme:
+
+```bash
+wp builtnorth setup-bn-project --name="My Project" --email="admin@example.com" --password="secure123"
+```
+
+This enhanced setup includes everything from standard setup plus:
 - **Compass theme conversion** - Automatically converts the Compass theme to a project-specific theme
 - **Theme customization** - Renames theme to match project name, removes git references
 - **Dependency management** - Removes compass from composer.json after conversion
 - **NPM workspace integration** - Adds the new theme to npm workspaces and updates build scripts
-- **Content import** - Imports content from setup/data/content/*.xml files
-- **Media import** - Imports media with automatic logo/icon detection
-- **Page configuration** - Sets up home and blog pages automatically
+- **Advanced configuration** - Additional BuiltNorth-specific optimizations
 
 Options:
 - `--name=<name>` - Project name (required)

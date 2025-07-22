@@ -10,6 +10,7 @@ if (!class_exists('WP_CLI')) {
 }
 
 use BuiltNorth\CLI\Commands\SetupCommand;
+use BuiltNorth\CLI\Commands\SetupBnProjectCommand;
 use BuiltNorth\CLI\Commands\ConfigureCommand;
 use BuiltNorth\CLI\Commands\GenerateCommand;
 use BuiltNorth\CLI\Commands\PostTypeSwitchCommand;
@@ -36,7 +37,35 @@ if (!class_exists('BuiltNorth_Command')) {
     class BuiltNorth_Command extends WP_CLI_Command {
         
         /**
-         * Initialize a new BuiltNorth project
+         * Standard WordPress project setup
+         *
+         * ## OPTIONS
+         *
+         * [--name=<name>]
+         * : Project name
+         *
+         * [--username=<username>]
+         * : WordPress admin username
+         *
+         * [--password=<password>]
+         * : WordPress admin password
+         *
+         * [--email=<email>]
+         * : WordPress admin email
+         *
+         * ## EXAMPLES
+         *
+         *     wp builtnorth setup --name="My Project" --email="admin@example.com" --password="secure123"
+         *
+         * @when before_wp_load
+         */
+        public function setup($args, $assoc_args) {
+            $command = new SetupCommand();
+            $command->__invoke($args, $assoc_args);
+        }
+        
+        /**
+         * Initialize a BuiltNorth-specific project with Compass theme
          *
          * ## OPTIONS
          *
@@ -60,13 +89,14 @@ if (!class_exists('BuiltNorth_Command')) {
          *
          * ## EXAMPLES
          *
-         *     wp builtnorth setup --name="My Project"
-         *     wp builtnorth setup --name="My Project" --yes
+         *     wp builtnorth setup-bn-project --name="My Project"
+         *     wp builtnorth setup-bn-project --name="My Project" --yes
          *
          * @when before_wp_load
+         * @subcommand setup-bn-project
          */
-        public function setup($args, $assoc_args) {
-            $command = new SetupCommand();
+        public function setup_bn_project($args, $assoc_args) {
+            $command = new SetupBnProjectCommand();
             $command->__invoke($args, $assoc_args);
         }
         

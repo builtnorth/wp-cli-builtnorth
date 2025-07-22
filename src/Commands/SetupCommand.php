@@ -3,15 +3,12 @@
 namespace BuiltNorth\CLI\Commands;
 
 use BuiltNorth\CLI\BaseCommand;
-use BuiltNorth\CLI\Traits\FileOperationsTrait;
 use WP_CLI;
 
 /**
- * Setup command for initializing BuiltNorth projects
+ * Standard setup command for WordPress projects
  */
 class SetupCommand extends BaseCommand {
-    
-    use FileOperationsTrait;
     
     /**
      * Command name
@@ -33,200 +30,56 @@ class SetupCommand extends BaseCommand {
      * @return string
      */
     protected function get_shortdesc() {
-        return 'Initialize a new BuiltNorth project';
+        return 'Standard WordPress project setup';
     }
     
     /**
-     * Initialize a new BuiltNorth project
+     * Bootstrap a new WordPress project
      * 
      * ## OPTIONS
      * 
      * [--name=<name>]
-     * : Project name
+     * : Project name (required)
      * 
      * [--username=<username>]
-     * : WordPress admin username
+     * : WordPress admin username (default: admin)
      * 
      * [--password=<password>]
-     * : WordPress admin password
+     * : WordPress admin password (required)
      * 
      * [--email=<email>]
-     * : WordPress admin email
-     * 
-     * [--skip-wordpress]
-     * : Skip WordPress installation
+     * : WordPress admin email (required)
      * 
      * ## EXAMPLES
      * 
-     *     wp builtnorth setup --name="My Project"
-     *     wp builtnorth setup --name="My Project" --skip-wordpress
+     *     wp builtnorth setup --name="My Project" --email="admin@example.com" --password="secure123"
      * 
      * @when before_wp_load
      */
     public function __invoke($args, $assoc_args) {
-        WP_CLI::line($this->get_ascii_art());
-        WP_CLI::success('Get started by entering WordPress setup info.');
+        WP_CLI::line('WordPress Setup');
+        WP_CLI::line('===============');
+        WP_CLI::line('');
         
-        // Check if WordPress is already installed and warn user
-        if (empty($assoc_args['skip-wordpress']) && $this->is_wordpress_installed()) {
-            WP_CLI::warning('WordPress appears to be already installed at this location.');
-            WP_CLI::warning('Running setup will DELETE all existing data and create a fresh installation.');
-            
-            // Support --yes flag to skip confirmation
-            if (empty($assoc_args['yes'])) {
-                $confirm = $this->prompt('Are you sure you want to continue? All data will be lost! [y/N]', 'n');
-                if (strtolower($confirm) !== 'y') {
-                    WP_CLI::error('Setup cancelled by user.');
-                }
-            }
-            
-            WP_CLI::line('');
+        // Get values from args
+        $name = $assoc_args['name'] ?? WP_CLI::error('Missing --name parameter');
+        $username = $assoc_args['username'] ?? 'admin';
+        $email = $assoc_args['email'] ?? WP_CLI::error('Missing --email parameter');
+        $password = $assoc_args['password'] ?? WP_CLI::error('Missing --password parameter');
+        
+        // Sanitize project name
+        $sitename = strtolower(str_replace(' ', '-', $name));
+        $url = "https://{$sitename}.lndo.site";
+        
+        // Step 1: Install WordPress
+        WP_CLI::line('Installing WordPress...');
+        
+        // First ensure WordPress core files exist
+        if (!file_exists('wp/index.php')) {
+            WP_CLI::error('WordPress core files not found. Please ensure composer install has run successfully.');
         }
         
-        // Collect project information
-        $config = $this->collect_setup_info($assoc_args);
-        
-        // Generate configuration files
-        $this->generate_env_file($config);
-        $this->generate_lando_file($config);
-        
-        // Start Lando
-        WP_CLI::line('Starting Lando environment...');
-        $this->start_lando();
-        
-        // Install dependencies
-        $this->install_dependencies();
-        
-        // Install WordPress unless skipped
-        if (empty($assoc_args['skip-wordpress'])) {
-            $this->install_wordpress($config);
-        }
-        
-        // Display completion message
-        $this->display_completion_message($config);
-    }
-    
-    /**
-     * Collect setup information
-     * 
-     * @param array $assoc_args
-     * @return array
-     */
-    private function collect_setup_info($assoc_args) {
-        $config = [];
-        
-        // Site name
-        $config['sitename_original'] = $assoc_args['name'] ?? $this->prompt('Site Name');
-        $config['sitename'] = $this->sanitize_site_name($config['sitename_original']);
-        
-        // WordPress credentials
-        if (empty($assoc_args['skip-wordpress'])) {
-            $config['username'] = $assoc_args['username'] ?? $this->prompt('Username', 'admin');
-            $config['password'] = $assoc_args['password'] ?? $this->prompt('Password');
-            $config['email'] = $assoc_args['email'] ?? $this->prompt('Email Address', '', function($email) {
-                return filter_var($email, FILTER_VALIDATE_EMAIL);
-            });
-        }
-        
-        // URL
-        $config['url'] = "https://{$config['sitename']}.lndo.site";
-        
-        return $config;
-    }
-    
-    /**
-     * Sanitize site name for use in URLs
-     * 
-     * @param string $name
-     * @return string
-     */
-    private function sanitize_site_name($name) {
-        return strtolower(str_replace(' ', '-', $name));
-    }
-    
-    /**
-     * Generate .env file
-     * 
-     * @param array $config
-     */
-    private function generate_env_file($config) {
-        WP_CLI::line('Generating .env file...');
-        
-        $this->copy_template(
-            '.env.example',
-            '.env',
-            ['project-name' => $config['sitename']]
-        );
-    }
-    
-    /**
-     * Generate .lando.yml file
-     * 
-     * @param array $config
-     */
-    private function generate_lando_file($config) {
-        WP_CLI::line('Generating .lando.yml file...');
-        
-        $this->copy_template(
-            '.lando.example.yml',
-            '.lando.yml',
-            ['project-name' => $config['sitename']]
-        );
-    }
-    
-    /**
-     * Start Lando
-     */
-    private function start_lando() {
-        $result = $this->exec('lando start');
-        
-        if ($result->return_code !== 0) {
-            WP_CLI::error('Failed to start Lando. Please check your Docker and Lando installation.');
-        }
-        
-        WP_CLI::success('Lando started successfully');
-    }
-    
-    /**
-     * Install dependencies
-     */
-    private function install_dependencies() {
-        $progress = $this->make_progress_bar('Installing dependencies', 3);
-        
-        // Composer install (this will get the compass theme)
-        $progress->tick();
-        WP_CLI::line('Installing Composer dependencies (including Compass theme)...');
-        $this->exec('lando composer install');
-        
-        // Theme & plugin composer
-        $progress->tick();
-        WP_CLI::line('Installing theme and plugin dependencies...');
-        $result = $this->exec('lando composer-all-install', false);
-        if ($result->return_code !== 0) {
-            WP_CLI::warning('Some theme/plugin dependencies may not have installed. This is normal if composer-all-install is not configured.');
-        }
-        
-        // NPM install and build
-        $progress->tick();
-        WP_CLI::line('Installing and building NPM dependencies...');
-        $npm_result = $this->exec('lando npm install', false);
-        if ($npm_result->return_code === 0) {
-            $this->exec('lando npm run build', false);
-        } else {
-            WP_CLI::warning('NPM install skipped. You may need to run it manually.');
-        }
-        
-        $progress->finish();
-        WP_CLI::success('Dependencies installation completed');
-    }
-    
-    /**
-     * Install WordPress
-     * 
-     * @param array $config
-     */
-    private function install_wordpress($config) {
-        $this->wait_for_database();
+        $this->wait_for_db();
         
         // Check if WordPress is already installed
         $result = $this->exec('lando wp core is-installed', false);
@@ -265,18 +118,20 @@ class SetupCommand extends BaseCommand {
             }
         }
         
-        // Install WordPress
-        WP_CLI::line('Installing WordPress...');
-        $install_command = sprintf(
+        $install_cmd = sprintf(
             'lando wp core install --url="%s" --title="%s" --admin_user="%s" --admin_password="%s" --admin_email="%s" --skip-email',
-            $config['url'],
-            $config['sitename_original'],
-            $config['username'],
-            $config['password'],
-            $config['email']
+            $url,
+            $name,
+            $username,
+            $password,
+            $email
         );
         
-        $result = $this->exec($install_command);
+        WP_CLI::line("Running: $install_cmd");
+        
+        // Use exec to capture output
+        $result = $this->exec($install_cmd);
+        
         if ($result->return_code !== 0) {
             WP_CLI::error('WordPress installation failed. Please check the configuration.');
         }
@@ -290,49 +145,51 @@ class SetupCommand extends BaseCommand {
             WP_CLI::error('WordPress installation verification failed');
         }
         
-        // Configure WordPress
-        $this->configure_wordpress($config);
-    }
-    
-    /**
-     * Display completion message
-     * 
-     * @param array $config
-     */
-    private function display_completion_message($config) {
+        // Step 2: Configure WordPress
+        WP_CLI::line('Configuring WordPress...');
+        
+        // Handle theme installation
+        $this->handle_theme_installation();
+        
+        // Activate plugins
+        $this->activate_plugins();
+        
+        // Configure settings
+        $this->configure_settings();
+        
+        // Import content
+        $this->import_content();
+        
+        // Import media
+        $this->import_media();
+        
+        // Setup pages
+        $this->setup_pages();
+        
+        // Success!
         WP_CLI::line('');
         WP_CLI::success('Setup complete!');
+        WP_CLI::line('');
         
-        if (!empty($config['username'])) {
+        // Final verification
+        $final_check = $this->exec('lando wp core is-installed', false);
+        if ($final_check->return_code === 0) {
+            WP_CLI::success('WordPress installation verified!');
             WP_CLI::line('');
-            WP_CLI::line('WordPress login info:');
-            WP_CLI::line("URL: http://{$config['sitename']}.lndo.site/wp/wp-admin");
-            WP_CLI::line("Username: {$config['username']}");
-            WP_CLI::line("Password: {$config['password']}");
-            WP_CLI::line("Email: {$config['email']}");
+            WP_CLI::line("Frontend: {$url}");
+            WP_CLI::line("Admin: {$url}/wp/wp-admin");
+            WP_CLI::line("Username: {$username}");
+            WP_CLI::line("Password: {$password}");
+        } else {
+            WP_CLI::warning('WordPress may not be properly installed. Please check your site.');
+            WP_CLI::line("Try visiting: {$url}");
         }
-    }
-    
-    /**
-     * Check if WordPress is already installed
-     * 
-     * @return bool
-     */
-    private function is_wordpress_installed() {
-        // Check if wp-config.php exists
-        if (!file_exists('wp-config.php') && !file_exists('../wp-config.php')) {
-            return false;
-        }
-        
-        // Try to check if WordPress is installed via WP-CLI
-        $result = $this->exec('lando wp core is-installed', false);
-        return $result->return_code === 0;
     }
     
     /**
      * Wait for database to be ready
      */
-    private function wait_for_database() {
+    private function wait_for_db() {
         $max_attempts = 60; // 2 minutes total
         $attempt = 0;
         
@@ -349,7 +206,7 @@ class SetupCommand extends BaseCommand {
             $attempt++;
             
             if ($attempt === 1) {
-                WP_CLI::line('Database service is starting up...');
+                WP_CLI::line("Database service is starting up...");
             } elseif ($attempt % 10 === 0) {
                 WP_CLI::line("Still waiting... (attempt {$attempt}/{$max_attempts})");
             }
@@ -363,134 +220,97 @@ class SetupCommand extends BaseCommand {
     }
     
     /**
-     * Configure WordPress after installation
-     * 
-     * @param array $config
-     */
-    private function configure_wordpress($config) {
-        WP_CLI::line('Configuring WordPress...');
-        
-        // Handle theme installation
-        $this->handle_theme_installation();
-        
-        // Activate plugins
-        $this->activate_plugins();
-        
-        // Configure settings
-        $this->configure_settings();
-        
-        // Import content and media
-        $this->import_content_and_media();
-        
-        // Setup home and blog pages
-        $this->setup_pages();
-        
-        // Clean default content
-        $this->clean_default_content();
-    }
-    
-    /**
-     * Handle theme installation and activation
+     * Handle theme installation
      */
     private function handle_theme_installation() {
-        WP_CLI::line('Setting up theme...');
+        WP_CLI::line('Checking for themes...');
         
         $project_root = getcwd();
-        $themes_dest_dir = $project_root . '/wp-content/themes';
-        $compass_theme_path = $themes_dest_dir . '/compass';
+        $composer_file = $project_root . '/composer.json';
+        $has_composer_themes = false;
         
-        // Get the project name from lando config
-        $lando_config_path = $project_root . '/.lando.yml';
-        $project_name = 'custom-theme'; // default
-        
-        if (file_exists($lando_config_path)) {
-            $lando_config = file_get_contents($lando_config_path);
-            if (preg_match('/^name:\s*(.+)$/m', $lando_config, $matches)) {
-                $project_name = trim($matches[1]);
-            }
-        }
-        
-        $new_theme_path = $themes_dest_dir . '/' . $project_name;
-        
-        // Check if compass theme exists (should be installed by composer)
-        if (is_dir($compass_theme_path)) {
-            WP_CLI::line('Found Compass theme. Creating project-specific theme...');
+        // Check if composer has theme packages
+        if (file_exists($composer_file)) {
+            $composer_json = json_decode(file_get_contents($composer_file), true);
             
-            // Copy compass to new theme directory
-            if ($compass_theme_path !== $new_theme_path) {
-                WP_CLI::line("Copying Compass theme to {$project_name}...");
-                $copy_result = $this->exec("cp -r {$compass_theme_path} {$new_theme_path}", false);
-                
-                if ($copy_result->return_code === 0) {
-                    WP_CLI::success("Created theme: {$project_name}");
-                    
-                    // Remove git references
-                    $this->remove_git_references($new_theme_path);
-                    
-                    // Update theme metadata
-                    $this->update_theme_metadata($new_theme_path, $project_name);
-                    
-                    // Remove original compass theme
-                    $this->exec("rm -rf {$compass_theme_path}", false);
-                    
-                    // Remove compass from composer.json
-                    $this->remove_compass_dependency();
-                    
-                    // Add theme to npm workspaces
-                    $this->add_theme_to_workspaces($project_name);
-                } else {
-                    WP_CLI::warning('Failed to copy Compass theme');
-                    $new_theme_path = $compass_theme_path;
-                    $project_name = 'compass';
-                }
-            }
-            
-            // Activate the theme
-            WP_CLI::line("Activating {$project_name} theme...");
-            $activate_result = $this->exec("lando wp theme activate {$project_name}", false);
-            
-            if ($activate_result->return_code === 0) {
-                WP_CLI::success("Theme {$project_name} activated successfully");
-                return;
-            } else {
-                WP_CLI::warning("Failed to activate {$project_name} theme");
-            }
-        } else {
-            WP_CLI::warning('Compass theme not found. Please ensure "builtnorth/compass" is in your composer.json');
-        }
-        
-        // Fallback: Check for themes in setup/data/themes
-        $themes_source_dir = $project_root . '/setup/data/themes';
-        if (is_dir($themes_source_dir)) {
-            $themes_to_copy = glob($themes_source_dir . '/*', GLOB_ONLYDIR);
-            if (!empty($themes_to_copy)) {
-                WP_CLI::line('Copying themes from setup/data/themes...');
-                
-                foreach ($themes_to_copy as $theme_path) {
-                    $theme_name = basename($theme_path);
-                    $dest_path = $themes_dest_dir . '/' . $theme_name;
-                    
-                    if (!is_dir($dest_path)) {
-                        $copy_result = $this->exec("cp -r {$theme_path} {$dest_path}", false);
-                        if ($copy_result->return_code === 0) {
-                            WP_CLI::success("Copied theme: {$theme_name}");
-                        }
+            foreach (['require', 'require-dev'] as $section) {
+                foreach ($composer_json[$section] ?? [] as $package => $version) {
+                    if (strpos($package, '/theme') !== false || 
+                        strpos($package, 'wp-content/themes/') !== false ||
+                        preg_match('/themes?\//', $package)) {
+                        $has_composer_themes = true;
+                        WP_CLI::line("Found theme package in composer.json: {$package}");
+                        break 2;
                     }
                 }
             }
         }
         
-        // Try to activate any available theme
-        $available_themes = glob($themes_dest_dir . '/*', GLOB_ONLYDIR);
-        if (!empty($available_themes)) {
-            $theme_to_activate = basename($available_themes[0]);
+        // Check for themes in setup/data/themes
+        $themes_source_dir = $project_root . '/setup/data/themes';
+        $themes_to_copy = [];
+        
+        if (is_dir($themes_source_dir)) {
+            $themes_to_copy = glob($themes_source_dir . '/*', GLOB_ONLYDIR);
+            if (!empty($themes_to_copy)) {
+                WP_CLI::line('Found ' . count($themes_to_copy) . ' theme(s) in setup/data/themes/');
+            }
+        }
+        
+        // Copy themes from setup/data if found
+        $themes_dest_dir = $project_root . '/wp-content/themes';
+        foreach ($themes_to_copy as $theme_path) {
+            $theme_name = basename($theme_path);
+            $dest_path = $themes_dest_dir . '/' . $theme_name;
             
-            $activate_result = $this->exec("lando wp theme activate {$theme_to_activate}", false);
-            if ($activate_result->return_code === 0) {
-                WP_CLI::success("Activated theme: {$theme_to_activate}");
+            WP_CLI::line("Copying theme: {$theme_name}");
+            
+            $copy_result = $this->exec("cp -r {$theme_path} {$dest_path}", false);
+            
+            if ($copy_result->return_code === 0) {
+                WP_CLI::success("Copied theme: {$theme_name}");
+            } else {
+                WP_CLI::warning("Failed to copy theme {$theme_name}");
+            }
+        }
+        
+        // Check what themes are now available
+        $available_themes = glob($themes_dest_dir . '/*', GLOB_ONLYDIR);
+        $theme_count = count($available_themes);
+        
+        // Only install default theme if no themes exist
+        if (!$has_composer_themes && empty($themes_to_copy) && $theme_count === 0) {
+            WP_CLI::line('No themes found, installing default theme...');
+            
+            $themes_to_try = ['twentytwentyfive', 'twentytwentyfour', 'twentytwentythree'];
+            $theme_installed = false;
+            
+            foreach ($themes_to_try as $theme) {
+                $theme_result = $this->exec("lando wp theme install $theme --activate", false);
+                if ($theme_result->return_code === 0) {
+                    WP_CLI::success("Theme $theme installed and activated");
+                    $theme_installed = true;
+                    break;
+                }
+            }
+            
+            if (!$theme_installed) {
+                WP_CLI::warning('Could not install any default theme. You may need to install one manually.');
             }
         } else {
-            WP_CLI::error('No themes found. The Compass theme should be installed via composer.');
+            WP_CLI::line("Found {$theme_count} theme(s) in wp-content/themes/");
+            
+            // Activate the first available theme
+            if ($theme_count > 0) {
+                $first_theme = basename($available_themes[0]);
+                $activate_result = $this->exec("lando wp theme activate {$first_theme}", false);
+                
+                if ($activate_result->return_code === 0) {
+                    WP_CLI::success("Activated theme: {$first_theme}");
+                } else {
+                    WP_CLI::warning("Failed to activate theme {$first_theme}");
+                }
+            }
         }
     }
     
@@ -528,12 +348,10 @@ class SetupCommand extends BaseCommand {
     }
     
     /**
-     * Import content and media
+     * Import content from XML files
      */
-    private function import_content_and_media() {
+    private function import_content() {
         $project_root = getcwd();
-        
-        // Check for content files to import
         $content_dir = $project_root . '/setup/data/content';
         $content_files = [];
         
@@ -541,7 +359,6 @@ class SetupCommand extends BaseCommand {
             $content_files = glob($content_dir . '/*.xml');
         }
         
-        // Import content if XML files exist
         if (!empty($content_files)) {
             WP_CLI::line('Found ' . count($content_files) . ' content file(s) to import...');
             
@@ -567,11 +384,22 @@ class SetupCommand extends BaseCommand {
                     WP_CLI::success('Imported ' . basename($file));
                 }
             }
+            
+            // Clean default content
+            WP_CLI::line('Cleaning default content...');
+            $this->exec('lando wp post delete 1 --force', false); // Hello World
+            $this->exec('lando wp post delete 2 --force', false); // Sample Page
+            $this->exec('lando wp comment delete 1 --force', false); // Default comment
         } else {
             WP_CLI::line('No content files found in setup/data/content/');
         }
-        
-        // Import media
+    }
+    
+    /**
+     * Import media files
+     */
+    private function import_media() {
+        $project_root = getcwd();
         $images_dir = $project_root . '/setup/data/images';
         $logo_id = null;
         $icon_id = null;
@@ -619,6 +447,8 @@ class SetupCommand extends BaseCommand {
                     WP_CLI::success('Set site icon');
                 }
             }
+        } else {
+            WP_CLI::line('No images directory found at setup/data/images/');
         }
     }
     
@@ -662,253 +492,5 @@ class SetupCommand extends BaseCommand {
                 }
             }
         }
-    }
-    
-    /**
-     * Clean default WordPress content
-     */
-    private function clean_default_content() {
-        WP_CLI::line('Cleaning default content...');
-        
-        // Delete default posts and pages
-        $this->exec('lando wp post delete 1 --force', false); // Hello World post
-        $this->exec('lando wp post delete 2 --force', false); // Sample Page
-        $this->exec('lando wp comment delete 1 --force', false); // Default comment
-    }
-    
-    /**
-     * Remove git references from theme
-     * 
-     * @param string $theme_path
-     */
-    private function remove_git_references($theme_path) {
-        WP_CLI::line('Removing git references from theme...');
-        
-        // Remove .git directory
-        if (is_dir($theme_path . '/.git')) {
-            $this->exec("rm -rf {$theme_path}/.git", false);
-        }
-        
-        // Remove .gitattributes if it exists
-        if (file_exists($theme_path . '/.gitattributes')) {
-            unlink($theme_path . '/.gitattributes');
-        }
-        
-        // Keep .gitignore - it has important rules for the theme
-        
-        WP_CLI::success('Git references removed');
-    }
-    
-    /**
-     * Update theme metadata
-     * 
-     * @param string $theme_path
-     * @param string $theme_name
-     */
-    private function update_theme_metadata($theme_path, $theme_name) {
-        WP_CLI::line('Updating theme metadata...');
-        
-        // Update style.css
-        $style_css_path = $theme_path . '/style.css';
-        if (file_exists($style_css_path)) {
-            $style_content = file_get_contents($style_css_path);
-            
-            // Update theme name
-            $style_content = preg_replace(
-                '/Theme Name:\s*.+/i',
-                'Theme Name: ' . ucwords(str_replace('-', ' ', $theme_name)),
-                $style_content
-            );
-            
-            // Update text domain
-            $style_content = preg_replace(
-                '/Text Domain:\s*.+/i',
-                'Text Domain: ' . $theme_name,
-                $style_content
-            );
-            
-            file_put_contents($style_css_path, $style_content);
-        }
-        
-        // Update package.json if it exists
-        $package_json_path = $theme_path . '/package.json';
-        if (file_exists($package_json_path)) {
-            $package_content = file_get_contents($package_json_path);
-            $package_data = json_decode($package_content, true);
-            
-            if ($package_data) {
-                $package_data['name'] = $theme_name;
-                
-                // Remove repository field if it exists
-                unset($package_data['repository']);
-                
-                file_put_contents(
-                    $package_json_path,
-                    json_encode($package_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n"
-                );
-            }
-        }
-        
-        // Update composer.json if it exists
-        $composer_json_path = $theme_path . '/composer.json';
-        if (file_exists($composer_json_path)) {
-            $composer_content = file_get_contents($composer_json_path);
-            $composer_data = json_decode($composer_content, true);
-            
-            if ($composer_data) {
-                $composer_data['name'] = 'custom/' . $theme_name;
-                
-                // Remove repository fields
-                unset($composer_data['repositories']);
-                unset($composer_data['support']);
-                unset($composer_data['homepage']);
-                
-                file_put_contents(
-                    $composer_json_path,
-                    json_encode($composer_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n"
-                );
-            }
-        }
-        
-        WP_CLI::success('Theme metadata updated');
-    }
-    
-    /**
-     * Remove compass dependency from composer.json
-     */
-    private function remove_compass_dependency() {
-        WP_CLI::line('Removing compass dependency from composer.json...');
-        
-        $composer_json_path = getcwd() . '/composer.json';
-        if (file_exists($composer_json_path)) {
-            $composer_content = file_get_contents($composer_json_path);
-            $composer_data = json_decode($composer_content, true);
-            
-            if ($composer_data) {
-                // Remove from require
-                if (isset($composer_data['require']['builtnorth/compass'])) {
-                    unset($composer_data['require']['builtnorth/compass']);
-                }
-                
-                // Remove from require-dev
-                if (isset($composer_data['require-dev']['builtnorth/compass'])) {
-                    unset($composer_data['require-dev']['builtnorth/compass']);
-                }
-                
-                file_put_contents(
-                    $composer_json_path,
-                    json_encode($composer_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n"
-                );
-                
-                WP_CLI::success('Removed compass dependency');
-                
-                // Update composer lock
-                WP_CLI::line('Updating composer.lock...');
-                $this->exec('lando composer update --lock', false);
-            }
-        }
-    }
-    
-    /**
-     * Add theme to npm workspaces
-     * 
-     * @param string $theme_name
-     */
-    private function add_theme_to_workspaces($theme_name) {
-        WP_CLI::line('Adding theme to npm workspaces...');
-        
-        $package_json_path = getcwd() . '/package.json';
-        if (file_exists($package_json_path)) {
-            $package_content = file_get_contents($package_json_path);
-            $package_data = json_decode($package_content, true);
-            
-            if ($package_data) {
-                // Initialize workspaces if not exists
-                if (!isset($package_data['workspaces'])) {
-                    $package_data['workspaces'] = [];
-                }
-                
-                // Add the new theme to workspaces
-                $theme_workspace_path = 'wp-content/themes/' . $theme_name;
-                
-                // Check if it's already in workspaces
-                if (!in_array($theme_workspace_path, $package_data['workspaces'])) {
-                    // Remove any existing compass reference
-                    $package_data['workspaces'] = array_filter($package_data['workspaces'], function($workspace) {
-                        return !str_contains($workspace, 'themes/compass');
-                    });
-                    
-                    // Add the new theme
-                    $package_data['workspaces'][] = $theme_workspace_path;
-                    
-                    // Sort workspaces for consistency
-                    sort($package_data['workspaces']);
-                    
-                    // Update scripts section
-                    if (isset($package_data['scripts'])) {
-                        // Update watch scripts
-                        if (isset($package_data['scripts']['watch:compass-directory'])) {
-                            unset($package_data['scripts']['watch:compass-directory']);
-                            $package_data['scripts']['watch:' . $theme_name] = 'npm run start -w wp-content/themes/' . $theme_name;
-                        }
-                        
-                        // Update build scripts
-                        if (isset($package_data['scripts']['build:compass-directory'])) {
-                            unset($package_data['scripts']['build:compass-directory']);
-                            $package_data['scripts']['build:' . $theme_name] = 'npm run build -w wp-content/themes/' . $theme_name;
-                        }
-                        
-                        // Update theme-json scripts
-                        foreach (['theme-json:compile', 'theme-json:split', 'theme-json:watch'] as $script) {
-                            if (isset($package_data['scripts'][$script])) {
-                                $package_data['scripts'][$script] = str_replace(
-                                    'compass-directory',
-                                    $theme_name,
-                                    $package_data['scripts'][$script]
-                                );
-                            }
-                        }
-                    }
-                    
-                    // Save the updated package.json
-                    file_put_contents(
-                        $package_json_path,
-                        json_encode($package_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n"
-                    );
-                    
-                    WP_CLI::success("Added {$theme_workspace_path} to npm workspaces");
-                    
-                    // Run npm install to setup the workspace
-                    WP_CLI::line('Running npm install to setup workspace...');
-                    $npm_result = $this->exec('lando npm install', false);
-                    
-                    if ($npm_result->return_code === 0) {
-                        WP_CLI::success('Theme workspace setup complete');
-                    } else {
-                        WP_CLI::warning('npm install failed. You may need to run it manually.');
-                    }
-                } else {
-                    WP_CLI::line('Theme already in workspaces');
-                }
-            }
-        } else {
-            WP_CLI::warning('No package.json found in project root');
-        }
-    }
-    
-    /**
-     * Get ASCII art
-     * 
-     * @return string
-     */
-    private function get_ascii_art() {
-        return '
-  ____        _ _ _   _   _            _   _     
- |  _ \      (_) | | | \ | |          | | | |    
- | |_) |_   _ _| | |_|  \| | ___  _ __| |_| |__  
- |  _ <| | | | | | __| . ` |/ _ \| \'__| __| \'_ \ 
- | |_) | |_| | | | |_| |\  | (_) | |  | |_| | | |
- |____/ \__,_|_|_|\__|_| \_|\___/|_|   \__|_| |_|
-        ';
     }
 }
