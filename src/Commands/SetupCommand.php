@@ -393,22 +393,67 @@ class SetupCommand extends BaseCommand {
      * Handle theme installation and activation
      */
     private function handle_theme_installation() {
-        WP_CLI::line('Activating theme...');
+        WP_CLI::line('Setting up theme...');
         
         $project_root = getcwd();
         $themes_dest_dir = $project_root . '/wp-content/themes';
         $compass_theme_path = $themes_dest_dir . '/compass';
         
+        // Get the project name from lando config
+        $lando_config_path = $project_root . '/.lando.yml';
+        $project_name = 'custom-theme'; // default
+        
+        if (file_exists($lando_config_path)) {
+            $lando_config = file_get_contents($lando_config_path);
+            if (preg_match('/^name:\s*(.+)$/m', $lando_config, $matches)) {
+                $project_name = trim($matches[1]);
+            }
+        }
+        
+        $new_theme_path = $themes_dest_dir . '/' . $project_name;
+        
         // Check if compass theme exists (should be installed by composer)
         if (is_dir($compass_theme_path)) {
-            WP_CLI::line('Activating Compass theme...');
-            $activate_result = $this->exec('lando wp theme activate compass', false);
+            WP_CLI::line('Found Compass theme. Creating project-specific theme...');
+            
+            // Copy compass to new theme directory
+            if ($compass_theme_path !== $new_theme_path) {
+                WP_CLI::line("Copying Compass theme to {$project_name}...");
+                $copy_result = $this->exec("cp -r {$compass_theme_path} {$new_theme_path}", false);
+                
+                if ($copy_result->return_code === 0) {
+                    WP_CLI::success("Created theme: {$project_name}");
+                    
+                    // Remove git references
+                    $this->remove_git_references($new_theme_path);
+                    
+                    // Update theme metadata
+                    $this->update_theme_metadata($new_theme_path, $project_name);
+                    
+                    // Remove original compass theme
+                    $this->exec("rm -rf {$compass_theme_path}", false);
+                    
+                    // Remove compass from composer.json
+                    $this->remove_compass_dependency();
+                    
+                    // Add theme to npm workspaces
+                    $this->add_theme_to_workspaces($project_name);
+                } else {
+                    WP_CLI::warning('Failed to copy Compass theme');
+                    $new_theme_path = $compass_theme_path;
+                    $project_name = 'compass';
+                }
+            }
+            
+            // Activate the theme
+            WP_CLI::line("Activating {$project_name} theme...");
+            $activate_result = $this->exec("lando wp theme activate {$project_name}", false);
             
             if ($activate_result->return_code === 0) {
-                WP_CLI::success('Compass theme activated successfully');
+                WP_CLI::success("Theme {$project_name} activated successfully");
                 return;
             } else {
-                WP_CLI::warning('Failed to activate Compass theme');
+                WP_CLI::warning("Failed to activate {$project_name} theme");
             }
         } else {
             WP_CLI::warning('Compass theme not found. Please ensure "builtnorth/compass" is in your composer.json');
@@ -438,11 +483,7 @@ class SetupCommand extends BaseCommand {
         // Try to activate any available theme
         $available_themes = glob($themes_dest_dir . '/*', GLOB_ONLYDIR);
         if (!empty($available_themes)) {
-            // Prefer compass if it exists
-            $theme_to_activate = 'compass';
-            if (!is_dir($compass_theme_path)) {
-                $theme_to_activate = basename($available_themes[0]);
-            }
+            $theme_to_activate = basename($available_themes[0]);
             
             $activate_result = $this->exec("lando wp theme activate {$theme_to_activate}", false);
             if ($activate_result->return_code === 0) {
@@ -633,6 +674,226 @@ class SetupCommand extends BaseCommand {
         $this->exec('lando wp post delete 1 --force', false); // Hello World post
         $this->exec('lando wp post delete 2 --force', false); // Sample Page
         $this->exec('lando wp comment delete 1 --force', false); // Default comment
+    }
+    
+    /**
+     * Remove git references from theme
+     * 
+     * @param string $theme_path
+     */
+    private function remove_git_references($theme_path) {
+        WP_CLI::line('Removing git references from theme...');
+        
+        // Remove .git directory
+        if (is_dir($theme_path . '/.git')) {
+            $this->exec("rm -rf {$theme_path}/.git", false);
+        }
+        
+        // Remove .gitattributes if it exists
+        if (file_exists($theme_path . '/.gitattributes')) {
+            unlink($theme_path . '/.gitattributes');
+        }
+        
+        // Keep .gitignore - it has important rules for the theme
+        
+        WP_CLI::success('Git references removed');
+    }
+    
+    /**
+     * Update theme metadata
+     * 
+     * @param string $theme_path
+     * @param string $theme_name
+     */
+    private function update_theme_metadata($theme_path, $theme_name) {
+        WP_CLI::line('Updating theme metadata...');
+        
+        // Update style.css
+        $style_css_path = $theme_path . '/style.css';
+        if (file_exists($style_css_path)) {
+            $style_content = file_get_contents($style_css_path);
+            
+            // Update theme name
+            $style_content = preg_replace(
+                '/Theme Name:\s*.+/i',
+                'Theme Name: ' . ucwords(str_replace('-', ' ', $theme_name)),
+                $style_content
+            );
+            
+            // Update text domain
+            $style_content = preg_replace(
+                '/Text Domain:\s*.+/i',
+                'Text Domain: ' . $theme_name,
+                $style_content
+            );
+            
+            file_put_contents($style_css_path, $style_content);
+        }
+        
+        // Update package.json if it exists
+        $package_json_path = $theme_path . '/package.json';
+        if (file_exists($package_json_path)) {
+            $package_content = file_get_contents($package_json_path);
+            $package_data = json_decode($package_content, true);
+            
+            if ($package_data) {
+                $package_data['name'] = $theme_name;
+                
+                // Remove repository field if it exists
+                unset($package_data['repository']);
+                
+                file_put_contents(
+                    $package_json_path,
+                    json_encode($package_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n"
+                );
+            }
+        }
+        
+        // Update composer.json if it exists
+        $composer_json_path = $theme_path . '/composer.json';
+        if (file_exists($composer_json_path)) {
+            $composer_content = file_get_contents($composer_json_path);
+            $composer_data = json_decode($composer_content, true);
+            
+            if ($composer_data) {
+                $composer_data['name'] = 'custom/' . $theme_name;
+                
+                // Remove repository fields
+                unset($composer_data['repositories']);
+                unset($composer_data['support']);
+                unset($composer_data['homepage']);
+                
+                file_put_contents(
+                    $composer_json_path,
+                    json_encode($composer_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n"
+                );
+            }
+        }
+        
+        WP_CLI::success('Theme metadata updated');
+    }
+    
+    /**
+     * Remove compass dependency from composer.json
+     */
+    private function remove_compass_dependency() {
+        WP_CLI::line('Removing compass dependency from composer.json...');
+        
+        $composer_json_path = getcwd() . '/composer.json';
+        if (file_exists($composer_json_path)) {
+            $composer_content = file_get_contents($composer_json_path);
+            $composer_data = json_decode($composer_content, true);
+            
+            if ($composer_data) {
+                // Remove from require
+                if (isset($composer_data['require']['builtnorth/compass'])) {
+                    unset($composer_data['require']['builtnorth/compass']);
+                }
+                
+                // Remove from require-dev
+                if (isset($composer_data['require-dev']['builtnorth/compass'])) {
+                    unset($composer_data['require-dev']['builtnorth/compass']);
+                }
+                
+                file_put_contents(
+                    $composer_json_path,
+                    json_encode($composer_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n"
+                );
+                
+                WP_CLI::success('Removed compass dependency');
+                
+                // Update composer lock
+                WP_CLI::line('Updating composer.lock...');
+                $this->exec('lando composer update --lock', false);
+            }
+        }
+    }
+    
+    /**
+     * Add theme to npm workspaces
+     * 
+     * @param string $theme_name
+     */
+    private function add_theme_to_workspaces($theme_name) {
+        WP_CLI::line('Adding theme to npm workspaces...');
+        
+        $package_json_path = getcwd() . '/package.json';
+        if (file_exists($package_json_path)) {
+            $package_content = file_get_contents($package_json_path);
+            $package_data = json_decode($package_content, true);
+            
+            if ($package_data) {
+                // Initialize workspaces if not exists
+                if (!isset($package_data['workspaces'])) {
+                    $package_data['workspaces'] = [];
+                }
+                
+                // Add the new theme to workspaces
+                $theme_workspace_path = 'wp-content/themes/' . $theme_name;
+                
+                // Check if it's already in workspaces
+                if (!in_array($theme_workspace_path, $package_data['workspaces'])) {
+                    // Remove any existing compass reference
+                    $package_data['workspaces'] = array_filter($package_data['workspaces'], function($workspace) {
+                        return !str_contains($workspace, 'themes/compass');
+                    });
+                    
+                    // Add the new theme
+                    $package_data['workspaces'][] = $theme_workspace_path;
+                    
+                    // Sort workspaces for consistency
+                    sort($package_data['workspaces']);
+                    
+                    // Update scripts section
+                    if (isset($package_data['scripts'])) {
+                        // Update watch scripts
+                        if (isset($package_data['scripts']['watch:compass-directory'])) {
+                            unset($package_data['scripts']['watch:compass-directory']);
+                            $package_data['scripts']['watch:' . $theme_name] = 'npm run start -w wp-content/themes/' . $theme_name;
+                        }
+                        
+                        // Update build scripts
+                        if (isset($package_data['scripts']['build:compass-directory'])) {
+                            unset($package_data['scripts']['build:compass-directory']);
+                            $package_data['scripts']['build:' . $theme_name] = 'npm run build -w wp-content/themes/' . $theme_name;
+                        }
+                        
+                        // Update theme-json scripts
+                        foreach (['theme-json:compile', 'theme-json:split', 'theme-json:watch'] as $script) {
+                            if (isset($package_data['scripts'][$script])) {
+                                $package_data['scripts'][$script] = str_replace(
+                                    'compass-directory',
+                                    $theme_name,
+                                    $package_data['scripts'][$script]
+                                );
+                            }
+                        }
+                    }
+                    
+                    // Save the updated package.json
+                    file_put_contents(
+                        $package_json_path,
+                        json_encode($package_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n"
+                    );
+                    
+                    WP_CLI::success("Added {$theme_workspace_path} to npm workspaces");
+                    
+                    // Run npm install to setup the workspace
+                    WP_CLI::line('Running npm install to setup workspace...');
+                    $npm_result = $this->exec('lando npm install', false);
+                    
+                    if ($npm_result->return_code === 0) {
+                        WP_CLI::success('Theme workspace setup complete');
+                    } else {
+                        WP_CLI::warning('npm install failed. You may need to run it manually.');
+                    }
+                } else {
+                    WP_CLI::line('Theme already in workspaces');
+                }
+            }
+        } else {
+            WP_CLI::warning('No package.json found in project root');
+        }
     }
     
     /**
