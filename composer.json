@@ -1,32 +1,33 @@
 {
-    "name": "builtnorth/wp-cli-builtnorth",
-    "description": "WP-CLI commands for BuiltNorth WordPress development",
-    "type": "wp-cli-package",
-    "license": "MIT",
-    "authors": [
-        {
-            "name": "BuiltNorth",
-            "email": "dev@builtnorth.com"
-        }
-    ],
-    "require": {
-        "php": ">=7.4",
-        "wp-cli/wp-cli": "^2.5"
-    },
-    "require-dev": {
-        "wp-cli/wp-cli-tests": "^3.0"
-    },
-    "autoload": {
-        "psr-4": {
-            "BuiltNorth\\CLI\\": "src/"
-        },
-        "files": [
-            "command.php"
-        ]
-    },
-    "extra": {
-        "commands": [
-            "builtnorth"
-        ]
+  "name": "builtnorth/wp-cli-builtnorth",
+  "description": "WP-CLI commands for BuiltNorth WordPress development",
+  "type": "wp-cli-package",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "BuiltNorth",
+      "email": "dev@builtnorth.com"
     }
+  ],
+  "require": {
+    "php": ">=7.4",
+    "wp-cli/wp-cli": "^2.5"
+  },
+  "require-dev": {
+    "wp-cli/wp-cli-tests": "^3.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "BuiltNorth\\CLI\\": "src/"
+    },
+    "files": [
+      "command.php"
+    ]
+  },
+  "extra": {
+    "commands": [
+      "builtnorth"
+    ]
+  },
+  "version": "0.1.0"
 }
