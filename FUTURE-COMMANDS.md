@@ -297,16 +297,387 @@ wp builtnorth migrate import --file=site-export.zip
 wp builtnorth migrate check-compatibility --target=php8.1
 ```
 
+## 13. Block Management Commands
+
+### `wp builtnorth blocks inventory`
+Comprehensive block usage analysis:
+
+```bash
+# Basic inventory
+wp builtnorth blocks inventory
+
+# Output:
+# Block Registry Analysis
+# =====================
+# Total registered blocks: 147
+# Core blocks: 89
+# Custom blocks: 23
+# Plugin blocks: 35 (ACF: 12, WooCommerce: 15, Others: 8)
+# 
+# Usage Statistics:
+# core/paragraph ............. 3,456 instances (45.2%)
+# core/heading ............... 1,234 instances (16.1%)
+# core/image ................. 890 instances (11.6%)
+# custom/hero ................ 45 instances (0.6%)
+# acf/testimonial ............ 12 instances (0.2%)
+# 
+# Unused Registered Blocks (34):
+# - custom/old-hero (registered but never used)
+# - core/verse (available but never used)
+
+# Find specific block usage
+wp builtnorth blocks inventory --filter="custom/*"
+
+# Export detailed report
+wp builtnorth blocks inventory --format=csv --include-meta
+
+# Performance impact analysis
+wp builtnorth blocks inventory --analyze-performance
+```
+
+### `wp builtnorth blocks convert`
+Migrate between block types or from classic content:
+
+```bash
+# Classic to blocks conversion
+wp builtnorth blocks convert classic-to-blocks --post-type=post --dry-run
+
+# Block type conversion
+wp builtnorth blocks convert --from="core/gallery" --to="custom/gallery"
+# Maps attributes intelligently
+
+# ACF to native blocks
+wp builtnorth blocks convert acf-to-native --block="testimonial"
+# Generates block registration code and converts instances
+```
+
+## 14. Multi-site Management
+
+### `wp builtnorth multisite clone`
+Duplicate sites within a multisite network:
+
+```bash
+# Full site clone
+wp builtnorth multisite clone --from=2 --to-slug="new-region" --to-title="New Region Site"
+
+# What it does:
+# 1. Creates new site in network
+# 2. Copies all database tables
+# 3. Updates URLs in content
+# 4. Copies uploads/2 to uploads/5
+# 5. Maintains user permissions
+# 6. Updates site-specific options
+
+# Selective cloning
+wp builtnorth multisite clone --from=2 --to-slug="test-site" \
+  --skip-users \
+  --skip-media \
+  --skip-comments \
+  --content-after="2024-01-01"
+
+# Template-based cloning
+wp builtnorth multisite clone --template="store" --to-slug="store-west"
+```
+
+### `wp builtnorth multisite sync`
+Synchronize settings/content across network sites:
+
+```bash
+# Sync all settings from main site
+wp builtnorth multisite sync settings --source=1 --targets=all
+
+# Selective sync
+wp builtnorth multisite sync settings --source=1 --targets=2,3,4 \
+  --include="timezone_string,date_format,time_format"
+
+# Plugin activation sync
+wp builtnorth multisite sync plugins --source=1
+
+# Content sync
+wp builtnorth multisite sync content --source=1 --post-type=page \
+  --strategy=update
+
+# Menu sync
+wp builtnorth multisite sync menus --source=1 --menu="main-navigation"
+```
+
+## 15. Performance Analysis (Enhanced)
+
+### `wp builtnorth performance analyze`
+Deep performance profiling and bottleneck identification:
+
+```bash
+# Comprehensive analysis
+wp builtnorth performance analyze
+
+# Output:
+# WordPress Performance Analysis
+# =============================
+# 
+# Database Performance:
+# - Total queries: 245
+# - Slow queries (>0.05s): 12
+# - Duplicate queries: 34
+# 
+# Memory Usage:
+# - Peak memory: 45.3 MB
+# - Largest consumers:
+#   1. Plugin: woocommerce (12.3 MB)
+#   2. Theme: compass (5.2 MB)
+# 
+# Hook Performance:
+# - Total actions: 1,234
+# - Slowest hooks:
+#   1. init: 0.34s (45 callbacks)
+#   2. wp: 0.23s (23 callbacks)
+# 
+# Autoloaded Data:
+# - Total size: 2.3 MB (WARNING: should be <1MB)
+
+# Focus on specific area
+wp builtnorth performance analyze --focus=plugins
+
+# Monitor specific page
+wp builtnorth performance analyze --url="/shop" --requests=10
+```
+
+### `wp builtnorth performance optimize`
+Automated performance improvements:
+
+```bash
+# Interactive optimization wizard
+wp builtnorth performance optimize --interactive
+
+# Auto mode (safe optimizations only)
+wp builtnorth performance optimize --auto --safe
+
+# Aggressive mode
+wp builtnorth performance optimize --auto --aggressive
+# Includes:
+# - Disable unused plugins
+# - Remove all revisions
+# - Clear all caches
+# - Optimize all images
+```
+
+## 16. Code Quality & Standards
+
+### `wp builtnorth code scan`
+Comprehensive code analysis for quality and security:
+
+```bash
+# Full scan
+wp builtnorth code scan --path=wp-content/themes/compass
+
+# Output:
+# Code Quality Report
+# ==================
+# 
+# WordPress Coding Standards:
+# - Errors: 45
+# - Warnings: 234
+# 
+# Security Issues:
+# - High: 2 (SQL injection, XSS)
+# - Medium: 5 (Missing nonces)
+# - Low: 12 (Output escaping)
+# 
+# Deprecated Functions:
+# - get_currentuserinfo() → wp_get_current_user() (3 instances)
+
+# Security focused scan
+wp builtnorth code scan --security --path=wp-content/plugins/custom
+
+# Generate report
+wp builtnorth code scan --path=. --format=html --output=report.html
+```
+
+### `wp builtnorth code fix`
+Automated code fixes and updates:
+
+```bash
+# Fix coding standards
+wp builtnorth code fix --path=wp-content/themes/compass --standard=WordPress
+
+# Update deprecated functions
+wp builtnorth code fix --update-deprecated --backup
+
+# Security fixes (interactive)
+wp builtnorth code fix --security --interactive
+```
+
+## 17. Advanced Migration Tools (Enhanced)
+
+### `wp builtnorth migrate prepare`
+Prepare site for migration with environment-specific adjustments:
+
+```bash
+# Prepare for production
+wp builtnorth migrate prepare --target=production
+
+# What it does:
+# 1. Deactivate dev plugins
+# 2. Optimize database
+# 3. Update configurations
+# 4. Security hardening
+# 5. Create migration package
+
+# Custom profiles
+wp builtnorth migrate prepare --profile=staging
+# Uses .migrate-profiles/staging.yml
+```
+
+### `wp builtnorth migrate diff`
+Compare environments to ensure consistency:
+
+```bash
+# Compare local to staging
+wp builtnorth migrate diff --source=local --target=staging
+
+# Output:
+# - Database differences
+# - Plugin version mismatches
+# - Theme differences
+# - Configuration variations
+# - Content statistics
+
+# Generate sync script
+wp builtnorth migrate diff --source=local --target=staging --generate-sync
+```
+
+## 18. Team Collaboration
+
+### `wp builtnorth team share`
+Share development environment state:
+
+```bash
+# Create shareable snapshot
+wp builtnorth team share --create
+
+# What it includes:
+# 1. Database export (anonymized option)
+# 2. Uploads sample
+# 3. Theme/plugin list with versions
+# 4. Configuration snapshot
+# 5. Content statistics
+
+# Create with options
+wp builtnorth team share --create \
+  --anonymize \
+  --include-uploads=100 \
+  --expire="7d" \
+  --password="secret"
+
+# Apply shared state
+wp builtnorth team share --apply=https://share.url/package.zip
+```
+
+### `wp builtnorth team handoff`
+Generate comprehensive project documentation:
+
+```bash
+# Generate handoff docs
+wp builtnorth team handoff --format=markdown
+
+# Creates documentation with:
+# - Architecture overview
+# - Custom post types/taxonomies
+# - Database structure
+# - API endpoints
+# - Cron jobs
+# - Development workflow
+# - Known issues
+# - Key customizations
+
+# Interactive mode
+wp builtnorth team handoff --interactive
+# Adds context through Q&A
+```
+
+## 19. REST API Helpers
+
+### `wp builtnorth api test`
+Comprehensive API testing and documentation:
+
+```bash
+# Test all endpoints
+wp builtnorth api test --all
+
+# Output:
+# - Endpoints tested: 67
+# - Passed/Failed
+# - Performance metrics
+# - Security issues
+
+# Test with authentication
+wp builtnorth api test --endpoint="/custom/v1/orders" \
+  --auth=application-password \
+  --user=admin
+
+# Load testing
+wp builtnorth api test --endpoint="/wp/v2/posts" \
+  --concurrent=10 \
+  --requests=100
+```
+
+### `wp builtnorth api mock`
+Create mock API server for development:
+
+```bash
+# Generate mock data
+wp builtnorth api mock --endpoint="/custom/v1/products" --count=50
+
+# Start mock server
+wp builtnorth api mock --serve --port=3000
+# Mirrors WP REST API with mock data
+
+# Export for Postman/Insomnia
+wp builtnorth api generate --format=postman
+```
+
+## 20. Workflow Automation
+
+### `wp builtnorth workflow create`
+Create reusable task sequences:
+
+```bash
+# Create workflow interactively
+wp builtnorth workflow create "daily-maintenance"
+
+# Wizard:
+# 1. Select tasks
+# 2. Configure each task
+# 3. Set schedule
+
+# Run manually
+wp builtnorth workflow run daily-maintenance
+
+# List workflows
+wp builtnorth workflow list
+
+# Complex workflow example
+wp builtnorth workflow create "deployment"
+# tasks:
+#   - migrate prepare --target=production
+#   - performance optimize --auto
+#   - code scan --security
+#   - backup create --full
+```
+
 ## Implementation Priority
 
 Based on common use cases, recommended implementation order:
 
 1. **Development Helpers** - Most used during daily development
-2. **Media Clean** - Every project needs this
-3. **Enhanced Backup/Restore** - Critical for safety
-4. **Content Audit** - Great for maintenance
-5. **Fix Permissions** - Common pain point
-6. **Optimization Commands** - Performance wins
+2. **Performance Analysis/Optimize** - Universal need for optimization
+3. **Block Management** - Critical for modern WordPress
+4. **Team Collaboration** - Improves workflow efficiency
+5. **Code Quality** - Maintains standards automatically
+6. **Migration Tools** - Essential for deployments
+7. **Media Clean** - Every project needs this
+8. **Enhanced Backup/Restore** - Critical for safety
+9. **Content Audit** - Great for maintenance
+10. **Fix Permissions** - Common pain point
 
 ## Notes
 
@@ -315,3 +686,6 @@ Based on common use cases, recommended implementation order:
 - Add `--format=json` for scripting integration
 - Consider adding hooks for extensibility
 - Ensure all commands work within Lando environment
+- Commands should be composable (output of one can be input to another)
+- Include `--quiet` and `--verbose` modes
+- Support for `.builtnorthrc` configuration files
