@@ -14,7 +14,6 @@
         "wp-cli/wp-cli": "^2.5"
     },
     "require-dev": {
-        "builtnorth/coding-standards": "*",
         "wp-cli/wp-cli-tests": "^3.0"
     },
     "autoload": {
@@ -31,10 +30,7 @@
     },
     "config": {
         "optimize-autoloader": true,
-        "sort-packages": true,
-        "allow-plugins": {
-            "dealerdirect/phpcodesniffer-composer-installer": true
-        }
+        "sort-packages": true
     },
     "extra": {
         "commands": [
