@@ -1,17 +1,17 @@
-name: Tests
+name: Scheduled CI
 
 on:
-  pull_request:
-    branches: [ main ]
+  schedule:
+    # Run every Monday at 10:00 AM ET (2:00 PM UTC)
+    - cron: '0 14 * * 1'
   workflow_dispatch:
 
 jobs:
-  ci:
+  scheduled-ci:
     uses: builtnorth/.github/.github/workflows/composer-package-ci.yml@main
     secrets: inherit
     with:
       composer-repository-profile: coding-standards-only
-      # Package has no phpunit.xml, phpcs config, or composer phpcompat/lint scripts yet.
       run-coverage: false
       run-phpcs: false
       run-phpcompat: false
