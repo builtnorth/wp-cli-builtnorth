@@ -11,3 +11,7 @@ jobs:
     secrets: inherit
     with:
       composer-repository-profile: coding-standards-only
+      # Package has no phpunit.xml, phpcs config, or composer phpcompat/lint scripts yet.
+      run-coverage: false
+      run-phpcs: false
+      run-phpcompat: false
