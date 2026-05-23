@@ -306,7 +306,7 @@ class SetupBnProjectCommand extends BaseCommand {
         if (!empty($config['username'])) {
             WP_CLI::line('');
             WP_CLI::line('WordPress login info:');
-            WP_CLI::line("URL: http://{$config['sitename']}.lndo.site/wp/wp-admin");
+            WP_CLI::line("URL: http://{$config['sitename']}.lndo.site/app/wp-admin");
             WP_CLI::line("Username: {$config['username']}");
             WP_CLI::line("Password: {$config['password']}");
             WP_CLI::line("Email: {$config['email']}");

@@ -177,7 +177,7 @@ class SetupCommand extends BaseCommand {
             WP_CLI::success('WordPress installation verified!');
             WP_CLI::line('');
             WP_CLI::line("Frontend: {$url}");
-            WP_CLI::line("Admin: {$url}/wp/wp-admin");
+            WP_CLI::line("Admin: {$url}/app/wp-admin");
             WP_CLI::line("Username: {$username}");
             WP_CLI::line("Password: {$password}");
         } else {
