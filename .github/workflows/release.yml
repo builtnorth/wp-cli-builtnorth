@@ -25,6 +25,11 @@ jobs:
       composer-namespace: 'builtnorth/wp-cli-builtnorth'
       version: ${{ inputs.version }}
       prerelease: ${{ inputs.prerelease }}
+      # Match tests.yml — package has no phpunit/phpcs/phpcompat yet.
+      composer-repository-profile: coding-standards-only
+      run-coverage: false
+      run-phpcs: false
+      run-phpcompat: false
     permissions:
       contents: write
     secrets: inherit
