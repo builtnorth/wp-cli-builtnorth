@@ -146,6 +146,27 @@ if (!class_exists('BuiltNorth_Command')) {
          * default: post
          * ---
          *
+         * [--title-prefix=<prefix>]
+         * : Prefix for generated titles
+         * ---
+         * default: Generated
+         * ---
+         *
+         * [--title-type=<type>]
+         * : Type of title generation (default, business, location, numbered)
+         * ---
+         * default: numbered
+         * ---
+         *
+         * [--status=<status>]
+         * : Post status
+         * ---
+         * default: publish
+         * ---
+         *
+         * [--author=<author>]
+         * : Author ID or username
+         *
          * [--taxonomy=<taxonomy>]
          * : Taxonomy to assign terms from
          *
@@ -157,6 +178,15 @@ if (!class_exists('BuiltNorth_Command')) {
          *
          * [--with-content]
          * : Generate content for posts
+         *
+         * [--with-excerpt]
+         * : Generate excerpts for posts
+         *
+         * [--with-featured-image]
+         * : Add placeholder featured images
+         *
+         * [--meta=<meta>]
+         * : JSON string of meta key-value pairs to add
          *
          * ## EXAMPLES
          *
