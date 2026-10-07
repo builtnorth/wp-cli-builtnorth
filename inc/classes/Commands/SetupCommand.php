@@ -118,16 +118,18 @@ class SetupCommand extends BaseCommand {
             }
         }
         
+        // Every value is shell-escaped: a "$" or quote in a password or site
+        // name would otherwise be expanded or break the command.
         $install_cmd = sprintf(
-            'lando wp core install --url="%s" --title="%s" --admin_user="%s" --admin_password="%s" --admin_email="%s" --skip-email',
-            $url,
-            $name,
-            $username,
-            $password,
-            $email
+            'lando wp core install --url=%s --title=%s --admin_user=%s --admin_password=%s --admin_email=%s --skip-email',
+            escapeshellarg($url),
+            escapeshellarg($name),
+            escapeshellarg($username),
+            escapeshellarg($password),
+            escapeshellarg($email)
         );
         
-        WP_CLI::line("Running: $install_cmd");
+        WP_CLI::line('Running: lando wp core install (admin password hidden)');
         
         // Use exec to capture output
         $result = $this->exec($install_cmd);
@@ -265,7 +267,7 @@ class SetupCommand extends BaseCommand {
             
             WP_CLI::line("Copying theme: {$theme_name}");
             
-            $copy_result = $this->exec("cp -r {$theme_path} {$dest_path}", false);
+            $copy_result = $this->exec('cp -r ' . escapeshellarg($theme_path) . ' ' . escapeshellarg($dest_path), false);
             
             if ($copy_result->return_code === 0) {
                 WP_CLI::success("Copied theme: {$theme_name}");
@@ -286,7 +288,7 @@ class SetupCommand extends BaseCommand {
             $theme_installed = false;
             
             foreach ($themes_to_try as $theme) {
-                $theme_result = $this->exec("lando wp theme install $theme --activate", false);
+                $theme_result = $this->exec('lando wp theme install ' . escapeshellarg($theme) . ' --activate', false);
                 if ($theme_result->return_code === 0) {
                     WP_CLI::success("Theme $theme installed and activated");
                     $theme_installed = true;
@@ -303,7 +305,7 @@ class SetupCommand extends BaseCommand {
             // Activate the first available theme
             if ($theme_count > 0) {
                 $first_theme = basename($available_themes[0]);
-                $activate_result = $this->exec("lando wp theme activate {$first_theme}", false);
+                $activate_result = $this->exec('lando wp theme activate ' . escapeshellarg($first_theme), false);
                 
                 if ($activate_result->return_code === 0) {
                     WP_CLI::success("Activated theme: {$first_theme}");
@@ -377,7 +379,7 @@ class SetupCommand extends BaseCommand {
             // Import each XML file
             foreach ($content_files as $file) {
                 WP_CLI::line('Importing: ' . basename($file));
-                $import_result = $this->exec("lando wp import {$file} --authors=create", false);
+                $import_result = $this->exec('lando wp import ' . escapeshellarg($file) . ' --authors=create', false);
                 if ($import_result->return_code !== 0) {
                     WP_CLI::warning('Failed to import ' . basename($file));
                 } else {
@@ -416,7 +418,7 @@ class SetupCommand extends BaseCommand {
                 WP_CLI::line('Importing ' . count($media_files) . ' media file(s)...');
                 
                 foreach ($media_files as $file) {
-                    $media_result = $this->exec("lando wp media import $file --porcelain", false);
+                    $media_result = $this->exec('lando wp media import ' . escapeshellarg($file) . ' --porcelain', false);
                     if ($media_result->return_code !== 0) {
                         WP_CLI::warning('Failed to import media ' . basename($file));
                     } else {

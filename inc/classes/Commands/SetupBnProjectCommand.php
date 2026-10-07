@@ -267,13 +267,15 @@ class SetupBnProjectCommand extends BaseCommand {
         
         // Install WordPress
         WP_CLI::line('Installing WordPress...');
+        // Every value is shell-escaped: a "$" or quote in a password or site
+        // name would otherwise be expanded or break the command.
         $install_command = sprintf(
-            'lando wp core install --url="%s" --title="%s" --admin_user="%s" --admin_password="%s" --admin_email="%s" --skip-email',
-            $config['url'],
-            $config['sitename_original'],
-            $config['username'],
-            $config['password'],
-            $config['email']
+            'lando wp core install --url=%s --title=%s --admin_user=%s --admin_password=%s --admin_email=%s --skip-email',
+            escapeshellarg($config['url']),
+            escapeshellarg($config['sitename_original']),
+            escapeshellarg($config['username']),
+            escapeshellarg($config['password']),
+            escapeshellarg($config['email'])
         );
         
         $result = $this->exec($install_command);
@@ -419,7 +421,7 @@ class SetupBnProjectCommand extends BaseCommand {
             // Copy compass to new theme directory
             if ($compass_theme_path !== $new_theme_path) {
                 WP_CLI::line("Copying Compass theme to {$project_name}...");
-                $copy_result = $this->exec("cp -r {$compass_theme_path} {$new_theme_path}", false);
+                $copy_result = $this->exec('cp -r ' . escapeshellarg($compass_theme_path) . ' ' . escapeshellarg($new_theme_path), false);
                 
                 if ($copy_result->return_code === 0) {
                     WP_CLI::success("Created theme: {$project_name}");
@@ -431,7 +433,7 @@ class SetupBnProjectCommand extends BaseCommand {
                     $this->update_theme_metadata($new_theme_path, $project_name);
                     
                     // Remove original compass theme
-                    $this->exec("rm -rf {$compass_theme_path}", false);
+                    $this->exec('rm -rf ' . escapeshellarg($compass_theme_path), false);
                     
                     // Remove compass from composer.json
                     $this->remove_compass_dependency();
@@ -447,7 +449,7 @@ class SetupBnProjectCommand extends BaseCommand {
             
             // Activate the theme
             WP_CLI::line("Activating {$project_name} theme...");
-            $activate_result = $this->exec("lando wp theme activate {$project_name}", false);
+            $activate_result = $this->exec('lando wp theme activate ' . escapeshellarg($project_name), false);
             
             if ($activate_result->return_code === 0) {
                 WP_CLI::success("Theme {$project_name} activated successfully");
@@ -471,7 +473,7 @@ class SetupBnProjectCommand extends BaseCommand {
                     $dest_path = $themes_dest_dir . '/' . $theme_name;
                     
                     if (!is_dir($dest_path)) {
-                        $copy_result = $this->exec("cp -r {$theme_path} {$dest_path}", false);
+                        $copy_result = $this->exec('cp -r ' . escapeshellarg($theme_path) . ' ' . escapeshellarg($dest_path), false);
                         if ($copy_result->return_code === 0) {
                             WP_CLI::success("Copied theme: {$theme_name}");
                         }
@@ -485,7 +487,7 @@ class SetupBnProjectCommand extends BaseCommand {
         if (!empty($available_themes)) {
             $theme_to_activate = basename($available_themes[0]);
             
-            $activate_result = $this->exec("lando wp theme activate {$theme_to_activate}", false);
+            $activate_result = $this->exec('lando wp theme activate ' . escapeshellarg($theme_to_activate), false);
             if ($activate_result->return_code === 0) {
                 WP_CLI::success("Activated theme: {$theme_to_activate}");
             }
@@ -560,7 +562,7 @@ class SetupBnProjectCommand extends BaseCommand {
             // Import each XML file
             foreach ($content_files as $file) {
                 WP_CLI::line('Importing: ' . basename($file));
-                $import_result = $this->exec("lando wp import {$file} --authors=create", false);
+                $import_result = $this->exec('lando wp import ' . escapeshellarg($file) . ' --authors=create', false);
                 if ($import_result->return_code !== 0) {
                     WP_CLI::warning('Failed to import ' . basename($file));
                 } else {
@@ -588,7 +590,7 @@ class SetupBnProjectCommand extends BaseCommand {
                 WP_CLI::line('Importing ' . count($media_files) . ' media file(s)...');
                 
                 foreach ($media_files as $file) {
-                    $media_result = $this->exec("lando wp media import $file --porcelain", false);
+                    $media_result = $this->exec('lando wp media import ' . escapeshellarg($file) . ' --porcelain', false);
                     if ($media_result->return_code !== 0) {
                         WP_CLI::warning('Failed to import media ' . basename($file));
                     } else {
@@ -686,7 +688,7 @@ class SetupBnProjectCommand extends BaseCommand {
         
         // Remove .git directory
         if (is_dir($theme_path . '/.git')) {
-            $this->exec("rm -rf {$theme_path}/.git", false);
+            $this->exec('rm -rf ' . escapeshellarg($theme_path . '/.git'), false);
         }
         
         // Remove .gitattributes if it exists
