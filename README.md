@@ -118,9 +118,9 @@ Options:
 
 ## Adding New Commands
 
-1. Create a new command class in `src/Commands/` extending `BaseCommand`
+1. Create a new command class in `inc/classes/Commands/` extending `BaseCommand`
 2. Register it in `command.php`
-3. Use traits from `src/Traits/` for common functionality
+3. Use traits from `inc/classes/Traits/` for common functionality
 
 Example:
 ```php
