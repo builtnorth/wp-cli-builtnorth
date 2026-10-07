@@ -111,8 +111,8 @@ if (!class_exists('BuiltNorth_Command')) {
          * [--skip-media]
          * : Skip media import
          *
-         * [--url=<url>]
-         * : Override the site URL for search-replace
+         * [--site-url=<url>]
+         * : Replace the site's current URL with this one (search-replace)
          *
          * [--yes]
          * : Skip confirmation prompt

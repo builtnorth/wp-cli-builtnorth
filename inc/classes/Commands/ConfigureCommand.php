@@ -40,8 +40,8 @@ class ConfigureCommand extends BaseCommand {
      * [--skip-media]
      * : Skip media import
      * 
-     * [--url=<url>]
-     * : Override the site URL for search-replace
+     * [--site-url=<url>]
+     * : Replace the site's current URL with this one (search-replace)
      * 
      * ## EXAMPLES
      * 
@@ -73,8 +73,8 @@ class ConfigureCommand extends BaseCommand {
                 WP_CLI::line('  - Import media files (logo, icon, placeholder images)');
             }
             
-            if (!empty($assoc_args['url'])) {
-                WP_CLI::line("  - Replace URLs in database with: {$assoc_args['url']}");
+            if (!empty($assoc_args['site-url'])) {
+                WP_CLI::line("  - Replace URLs in database with: {$assoc_args['site-url']}");
             }
             
             WP_CLI::line('  - Activate compass theme (if available)');
@@ -132,7 +132,7 @@ class ConfigureCommand extends BaseCommand {
         $steps['Setting up pages'] = 'setup_pages';
         $steps['Cleaning default content'] = 'clean_default_content';
         
-        if (!empty($assoc_args['url'])) {
+        if (!empty($assoc_args['site-url'])) {
             $steps['Updating URLs'] = 'update_urls';
         }
         
@@ -306,9 +306,14 @@ class ConfigureCommand extends BaseCommand {
      * Update URLs in database
      */
     private function update_urls($assoc_args) {
-        $new_url = $assoc_args['url'];
-        $old_url = 'https://basecamp-dev.lndo.site';
-        
-        $this->run_wp_command("search-replace '$old_url' '$new_url' --all-tables");
+        $new_url = untrailingslashit((string) $assoc_args['site-url']);
+        $old_url = untrailingslashit((string) get_option('home'));
+
+        if ($old_url === '' || $old_url === $new_url) {
+            return;
+        }
+
+        // Arguments as an array: nothing is re-parsed, so URLs are passed verbatim.
+        WP_CLI::run_command(['search-replace', $old_url, $new_url], ['all-tables' => true]);
     }
 }

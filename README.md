@@ -64,7 +64,7 @@ wp builtnorth configure
 Options:
 - `--skip-content` - Skip content import
 - `--skip-media` - Skip media import
-- `--url=<url>` - Override site URL for search-replace
+- `--site-url=<url>` - Replace the site's current URL with this one (search-replace)
 - `--yes` - Skip confirmation prompts
 
 ### Post Type Switch
