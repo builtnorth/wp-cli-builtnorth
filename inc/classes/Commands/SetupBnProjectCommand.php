@@ -68,6 +68,7 @@ class SetupBnProjectCommand extends BaseCommand {
         WP_CLI::success('Get started by entering WordPress setup info.');
         
         // Check if WordPress is already installed and warn user
+        $reset_confirmed = false;
         if (empty($assoc_args['skip-wordpress']) && $this->is_wordpress_installed()) {
             WP_CLI::warning('WordPress appears to be already installed at this location.');
             WP_CLI::warning('Running setup will DELETE all existing data and create a fresh installation.');
@@ -79,6 +80,7 @@ class SetupBnProjectCommand extends BaseCommand {
                     WP_CLI::error('Setup cancelled by user.');
                 }
             }
+            $reset_confirmed = true;
             
             WP_CLI::line('');
         }
@@ -99,7 +101,7 @@ class SetupBnProjectCommand extends BaseCommand {
         
         // Install WordPress unless skipped
         if (empty($assoc_args['skip-wordpress'])) {
-            $this->install_wordpress($config);
+            $this->install_wordpress($config, $reset_confirmed || !empty($assoc_args['yes']));
         }
         
         // Display completion message
@@ -224,8 +226,9 @@ class SetupBnProjectCommand extends BaseCommand {
      * Install WordPress
      * 
      * @param array $config
+     * @param bool  $reset_confirmed The database reset was already confirmed (prompt or --yes).
      */
-    private function install_wordpress($config) {
+    private function install_wordpress($config, $reset_confirmed = false) {
         $this->wait_for_database();
         
         // Check if WordPress is already installed
@@ -236,7 +239,7 @@ class SetupBnProjectCommand extends BaseCommand {
             WP_CLI::line('⚠️  This will RESET the database and delete all existing data!');
             WP_CLI::line('');
             
-            $response = $this->prompt('Do you want to continue? [y/N]', 'n');
+            $response = $reset_confirmed ? 'y' : $this->prompt('Do you want to continue? [y/N]', 'n');
             
             if (strtolower($response) !== 'y') {
                 WP_CLI::line('Setup cancelled.');
