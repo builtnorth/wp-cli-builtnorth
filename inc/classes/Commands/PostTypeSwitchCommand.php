@@ -79,6 +79,9 @@ class PostTypeSwitchCommand extends BaseCommand {
         $dry_run = !empty($assoc_args['dry-run']);
         $status = $assoc_args['status'] ?? 'any';
         $limit = isset($assoc_args['limit']) ? intval($assoc_args['limit']) : -1;
+        if (isset($assoc_args['limit']) && $limit < 1) {
+            WP_CLI::error('--limit must be a positive number.');
+        }
         $include_taxonomies = !empty($assoc_args['include-taxonomies']);
         
         // Validate post types
