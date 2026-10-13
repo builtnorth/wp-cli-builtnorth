@@ -223,7 +223,7 @@ Deep inspection of plugins and themes:
 
 Example usage:
 ```bash
-wp builtnorth inspect plugin polaris-forms
+wp builtnorth inspect plugin kitaris-forms
 wp builtnorth inspect theme compass --show-hooks
 wp builtnorth inspect plugin woocommerce --performance
 ```

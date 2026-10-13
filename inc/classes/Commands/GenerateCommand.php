@@ -92,7 +92,7 @@ class GenerateCommand extends BaseCommand {
      *     wp builtnorth generate
      * 
      *     # Generate listings with categories
-     *     wp builtnorth generate --count=50 --post-type=polaris_listing --taxonomy=polaris_listing_category --terms=residential,commercial,industrial --random-terms
+     *     wp builtnorth generate --count=50 --post-type=kitaris_listing --taxonomy=kitaris_listing_category --terms=residential,commercial,industrial --random-terms
      * 
      *     # Generate posts with full content
      *     wp builtnorth generate --count=20 --with-content --with-excerpt --with-featured-image
