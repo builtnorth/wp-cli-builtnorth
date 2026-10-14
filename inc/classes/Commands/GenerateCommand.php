@@ -260,7 +260,13 @@ class GenerateCommand extends BaseCommand {
      */
     private function add_placeholder_featured_image($post_id) {
         // Check if we have a placeholder image in media library
-        $placeholder = get_page_by_title('placeholder-image-canyon', OBJECT, 'attachment');
+        $placeholder = get_posts([
+            'post_type'      => 'attachment',
+            'post_status'    => 'any',
+            'title'          => 'placeholder-image-canyon',
+            'posts_per_page' => 1,
+        ]);
+        $placeholder = $placeholder[0] ?? null;
         
         if ($placeholder) {
             set_post_thumbnail($post_id, $placeholder->ID);

@@ -35,7 +35,7 @@ trait FileOperationsTrait {
      */
     protected function safe_file_write($file, $content, $backup = true) {
         if ($backup && file_exists($file)) {
-            $backup_file = $file . '.backup-' . date('Y-m-d-H-i-s');
+            $backup_file = $file . '.backup-' . gmdate('Y-m-d-H-i-s');
             if (!copy($file, $backup_file)) {
                 WP_CLI::warning("Failed to create backup of $file");
             } else {

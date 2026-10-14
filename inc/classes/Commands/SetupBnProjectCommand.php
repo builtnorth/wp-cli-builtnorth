@@ -138,12 +138,17 @@ class SetupBnProjectCommand extends BaseCommand {
     
     /**
      * Sanitize site name for use in URLs
-     * 
+     *
+     * The result is a hostname label (`{name}.lndo.site`): lowercase ASCII
+     * letters, digits and single hyphens, with no hyphen at either end.
+     *
      * @param string $name
      * @return string
      */
     private function sanitize_site_name($name) {
-        return strtolower(str_replace(' ', '-', $name));
+        $slug = strtolower(trim((string) $name));
+        $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
+        return trim((string) $slug, '-');
     }
     
     /**

@@ -126,7 +126,7 @@ class ContentGenerator {
                 return rand(1, 20);
             
             case 'year':
-                return rand(1990, date('Y'));
+                return rand(1990, (int) gmdate('Y'));
             
             case 'boolean':
                 return rand(0, 1) ? 'yes' : 'no';
