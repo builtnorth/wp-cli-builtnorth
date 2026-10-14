@@ -11,6 +11,3 @@ jobs:
     secrets: inherit
     with:
       composer-repository-profile: coding-standards-only
-      # Package has no phpunit.xml and its code predates the phpcs standard.
-      run-coverage: false
-      run-phpcs: false

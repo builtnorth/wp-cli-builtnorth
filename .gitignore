@@ -12,6 +12,11 @@ _srcMaps/
 /vendor
 composer.lock
 
+# Test / coverage artifacts
+coverage
+coverage.xml
+.phpunit.result.cache
+
 # Log files
 *.log
 

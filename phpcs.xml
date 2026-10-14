@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<ruleset xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="WP CLI Built North" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/squizlabs/PHP_CodeSniffer/master/phpcs.xsd">
+	<description>WP CLI Built North coding standards</description>
+
+	<file>inc</file>
+	<file>command.php</file>
+	<exclude-pattern>*/vendor/*</exclude-pattern>
+
+	<arg value="ps"/>
+	<arg name="colors"/>
+	<arg name="extensions" value="php"/>
+	<arg name="parallel" value="8"/>
+
+	<rule ref="BuiltNorth"/>
+
+	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+		<properties>
+			<property name="prefixes" type="array">
+				<element value="builtnorth"/>
+				<element value="BuiltNorth"/>
+			</property>
+		</properties>
+	</rule>
+</ruleset>

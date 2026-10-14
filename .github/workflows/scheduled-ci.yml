@@ -12,5 +12,3 @@ jobs:
     secrets: inherit
     with:
       composer-repository-profile: coding-standards-only
-      run-coverage: false
-      run-phpcs: false
