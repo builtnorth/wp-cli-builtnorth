@@ -4,6 +4,7 @@ namespace BuiltNorth\CLI\Commands;
 
 use BuiltNorth\CLI\BaseCommand;
 use BuiltNorth\CLI\Traits\FileOperationsTrait;
+use BuiltNorth\CLI\Utils\ThemeRenamer;
 use WP_CLI;
 
 /**
@@ -26,6 +27,15 @@ class SetupBnProjectCommand extends BaseCommand {
      * @var bool
      */
     protected $requires_wp = false;
+
+    /** Compass is cloned as editable source, then renamed for the project. */
+    private const COMPASS_REPO = 'git@github.com:builtnorth/compass.git';
+
+    /** Branch of Compass to start from. */
+    private const COMPASS_BRANCH = 'main';
+
+    /** Private Composer index for Built North packages (the theme needs kitaris/framework). */
+    private const REGISTRY_URL = 'https://raw.githubusercontent.com/builtnorth/registry/main';
     
     /**
      * Get short description
@@ -91,6 +101,7 @@ class SetupBnProjectCommand extends BaseCommand {
         // Generate configuration files
         $this->generate_env_file($config);
         $this->generate_lando_file($config);
+        $this->generate_auth_file();
         
         // Start Lando
         WP_CLI::line('Starting Lando environment...');
@@ -164,6 +175,30 @@ class SetupBnProjectCommand extends BaseCommand {
             '.env',
             ['project-name' => $config['sitename']]
         );
+        
+        $this->generate_salts(getcwd() . '/.env');
+    }
+    
+    /**
+     * Replace "KEY=generate" salt placeholders with random values.
+     *
+     * 64 hex characters: safe unquoted for both phpdotenv and Docker env files.
+     *
+     * @param string $env_path
+     */
+    private function generate_salts($env_path) {
+        if (!file_exists($env_path)) {
+            return;
+        }
+        
+        $content = (string) file_get_contents($env_path);
+        $content = (string) preg_replace_callback(
+            '/^((?:AUTH|SECURE_AUTH|LOGGED_IN|NONCE)_(?:KEY|SALT))=generate$/m',
+            static fn ($matches) => $matches[1] . '=' . bin2hex(random_bytes(32)),
+            $content
+        );
+        
+        file_put_contents($env_path, $content);
     }
     
     /**
@@ -179,6 +214,46 @@ class SetupBnProjectCommand extends BaseCommand {
             '.lando.yml',
             ['project-name' => $config['sitename']]
         );
+    }
+    
+    /**
+     * Generate auth.json for private Built North packages.
+     *
+     * Composer needs a GitHub token for the private registry and plugin
+     * releases. Built from the GitHub CLI login; the Lando build step copies it
+     * into the container's global Composer home. auth.json is gitignored and
+     * kept if it already exists.
+     */
+    private function generate_auth_file() {
+        $auth_path = getcwd() . '/auth.json';
+        
+        if (file_exists($auth_path)) {
+            WP_CLI::line('Using existing auth.json');
+            return;
+        }
+        
+        WP_CLI::line('Generating auth.json from your GitHub CLI login...');
+        $result = $this->exec('gh auth token', false);
+        $token  = trim((string) $result->stdout);
+        
+        if ($result->return_code !== 0 || $token === '') {
+            WP_CLI::error('Could not read a GitHub token. Run `gh auth login`, or create auth.json yourself (see README).');
+        }
+        
+        $auth = [
+            'github-oauth' => ['github.com' => $token],
+            'http-basic'   => [
+                'raw.githubusercontent.com' => [
+                    'username' => 'x-access-token',
+                    'password' => $token,
+                ],
+            ],
+        ];
+        
+        file_put_contents($auth_path, json_encode($auth, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+        chmod($auth_path, 0600);
+        
+        WP_CLI::success('auth.json created (gitignored)');
     }
     
     /**
@@ -200,10 +275,13 @@ class SetupBnProjectCommand extends BaseCommand {
     private function install_dependencies() {
         $progress = $this->make_progress_bar('Installing dependencies', 3);
         
-        // Composer install (this will get the compass theme)
+        // Composer install (WordPress, plugins)
         $progress->tick();
-        WP_CLI::line('Installing Composer dependencies (including Compass theme)...');
+        WP_CLI::line('Installing Composer dependencies...');
         $this->exec('lando composer install');
+
+        // Project theme: clone Compass, rename it, install its dependencies
+        $this->create_project_theme();
         
         // Theme & plugin composer
         $progress->tick();
@@ -263,8 +341,11 @@ class SetupBnProjectCommand extends BaseCommand {
             if ($db_result->return_code === 0) {
                 WP_CLI::success('Database created successfully');
             } else {
-                // Check if it's just because database already exists
-                $check_result = $this->exec('lando wp db check', false);
+                // Check if it's just because database already exists. `wp db
+                // query` uses the mysql client; `wp db check` needs mysqlcheck,
+                // which Lando's PHP 8.4 image ships from MariaDB and which fails
+                // TLS verification against MySQL's self-signed certificate.
+                $check_result = $this->exec('lando wp db query "SELECT 1"', false);
                 if ($check_result->return_code === 0) {
                     WP_CLI::line('Database already exists and is accessible');
                 } else {
@@ -316,7 +397,7 @@ class SetupBnProjectCommand extends BaseCommand {
         if (!empty($config['username'])) {
             WP_CLI::line('');
             WP_CLI::line('WordPress login info:');
-            WP_CLI::line("URL: http://{$config['sitename']}.lndo.site/app/wp-admin");
+            WP_CLI::line("URL: {$config['url']}/wp/wp-admin");
             WP_CLI::line("Username: {$config['username']}");
             WP_CLI::line("Password: {$config['password']}");
             WP_CLI::line("Email: {$config['email']}");
@@ -349,7 +430,9 @@ class SetupBnProjectCommand extends BaseCommand {
         WP_CLI::line('Waiting for database to be ready...');
         
         while ($attempt < $max_attempts) {
-            $result = $this->exec('lando wp db query "SELECT 1"', false);
+            // Ask MySQL directly: `wp db query` loads WordPress and fails with
+            // "site not installed" until the install that runs right after this.
+            $result = $this->exec('lando mysql -e "SELECT 1"', false);
             
             if ($result->return_code === 0) {
                 WP_CLI::success('Database is ready');
@@ -405,68 +488,23 @@ class SetupBnProjectCommand extends BaseCommand {
     private function handle_theme_installation() {
         WP_CLI::line('Setting up theme...');
         
-        $project_root = getcwd();
+        $project_root    = getcwd();
         $themes_dest_dir = $project_root . '/wp-content/themes';
-        $compass_theme_path = $themes_dest_dir . '/compass';
+        $project_name    = $this->get_project_name();
         
-        // Get the project name from lando config
-        $lando_config_path = $project_root . '/.lando.yml';
-        $project_name = 'custom-theme'; // default
-        
-        if (file_exists($lando_config_path)) {
-            $lando_config = file_get_contents($lando_config_path);
-            if (preg_match('/^name:\s*(.+)$/m', $lando_config, $matches)) {
-                $project_name = trim($matches[1]);
-            }
-        }
-        
-        $new_theme_path = $themes_dest_dir . '/' . $project_name;
-        
-        // Check if compass theme exists (should be installed by composer)
-        if (is_dir($compass_theme_path)) {
-            WP_CLI::line('Found Compass theme. Creating project-specific theme...');
-            
-            // Copy compass to new theme directory
-            if ($compass_theme_path !== $new_theme_path) {
-                WP_CLI::line("Copying Compass theme to {$project_name}...");
-                $copy_result = $this->exec('cp -r ' . escapeshellarg($compass_theme_path) . ' ' . escapeshellarg($new_theme_path), false);
-                
-                if ($copy_result->return_code === 0) {
-                    WP_CLI::success("Created theme: {$project_name}");
-                    
-                    // Remove git references
-                    $this->remove_git_references($new_theme_path);
-                    
-                    // Update theme metadata
-                    $this->update_theme_metadata($new_theme_path, $project_name);
-                    
-                    // Remove original compass theme
-                    $this->exec('rm -rf ' . escapeshellarg($compass_theme_path), false);
-                    
-                    // Remove compass from composer.json
-                    $this->remove_compass_dependency();
-                    
-                    // Add theme to npm workspaces
-                    $this->add_theme_to_workspaces($project_name);
-                } else {
-                    WP_CLI::warning('Failed to copy Compass theme');
-                    $new_theme_path = $compass_theme_path;
-                    $project_name = 'compass';
-                }
-            }
-            
-            // Activate the theme
+        // The project theme was created from Compass in install_dependencies()
+        if (is_dir($themes_dest_dir . '/' . $project_name)) {
             WP_CLI::line("Activating {$project_name} theme...");
             $activate_result = $this->exec('lando wp theme activate ' . escapeshellarg($project_name), false);
             
             if ($activate_result->return_code === 0) {
                 WP_CLI::success("Theme {$project_name} activated successfully");
                 return;
-            } else {
-                WP_CLI::warning("Failed to activate {$project_name} theme");
             }
+            
+            WP_CLI::warning("Failed to activate {$project_name} theme");
         } else {
-            WP_CLI::warning('Compass theme not found. Please ensure "builtnorth/compass" is in your composer.json');
+            WP_CLI::warning("Project theme {$project_name} not found.");
         }
         
         // Fallback: Check for themes in setup/data/themes
@@ -500,7 +538,7 @@ class SetupBnProjectCommand extends BaseCommand {
                 WP_CLI::success("Activated theme: {$theme_to_activate}");
             }
         } else {
-            WP_CLI::error('No themes found. The Compass theme should be installed via composer.');
+            WP_CLI::error('No themes found. The project theme is cloned from Compass during setup.');
         }
     }
     
@@ -570,7 +608,7 @@ class SetupBnProjectCommand extends BaseCommand {
             // Import each XML file
             foreach ($content_files as $file) {
                 WP_CLI::line('Importing: ' . basename($file));
-                $import_result = $this->exec('lando wp import ' . escapeshellarg($file) . ' --authors=create', false);
+                $import_result = $this->exec('lando wp import ' . escapeshellarg($this->project_relative_path($file)) . ' --authors=create', false);
                 if ($import_result->return_code !== 0) {
                     WP_CLI::warning('Failed to import ' . basename($file));
                 } else {
@@ -598,7 +636,7 @@ class SetupBnProjectCommand extends BaseCommand {
                 WP_CLI::line('Importing ' . count($media_files) . ' media file(s)...');
                 
                 foreach ($media_files as $file) {
-                    $media_result = $this->exec('lando wp media import ' . escapeshellarg($file) . ' --porcelain', false);
+                    $media_result = $this->exec('lando wp media import ' . escapeshellarg($this->project_relative_path($file)) . ' --porcelain', false);
                     if ($media_result->return_code !== 0) {
                         WP_CLI::warning('Failed to import media ' . basename($file));
                     } else {
@@ -768,8 +806,11 @@ class SetupBnProjectCommand extends BaseCommand {
             if ($composer_data) {
                 $composer_data['name'] = 'custom/' . $theme_name;
                 
-                // Remove repository fields
-                unset($composer_data['repositories']);
+                // Repositories are root-only: the theme installs as its own root,
+                // so it lists the registry itself (for kitaris/framework).
+                $composer_data['repositories'] = [
+                    ['type' => 'composer', 'url' => self::REGISTRY_URL],
+                ];
                 unset($composer_data['support']);
                 unset($composer_data['homepage']);
                 
@@ -784,38 +825,84 @@ class SetupBnProjectCommand extends BaseCommand {
     }
     
     /**
-     * Remove compass dependency from composer.json
+     * Path relative to the project root, for commands that run inside Lando.
+     *
+     * The container mounts the project at /app and starts there, so a host
+     * path (/Users/...) doesn't exist inside it; a relative path does.
+     *
+     * @param string $path Absolute host path under the project root.
+     * @return string
      */
-    private function remove_compass_dependency() {
-        WP_CLI::line('Removing compass dependency from composer.json...');
+    private function project_relative_path($path) {
+        $root = rtrim((string) getcwd(), '/') . '/';
         
-        $composer_json_path = getcwd() . '/composer.json';
-        if (file_exists($composer_json_path)) {
-            $composer_content = file_get_contents($composer_json_path);
-            $composer_data = json_decode($composer_content, true);
-            
-            if ($composer_data) {
-                // Remove from require
-                if (isset($composer_data['require']['builtnorth/compass'])) {
-                    unset($composer_data['require']['builtnorth/compass']);
-                }
-                
-                // Remove from require-dev
-                if (isset($composer_data['require-dev']['builtnorth/compass'])) {
-                    unset($composer_data['require-dev']['builtnorth/compass']);
-                }
-                
-                file_put_contents(
-                    $composer_json_path,
-                    json_encode($composer_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n"
-                );
-                
-                WP_CLI::success('Removed compass dependency');
-                
-                // Update composer lock
-                WP_CLI::line('Updating composer.lock...');
-                $this->exec('lando composer update --lock', false);
+        return str_starts_with($path, $root) ? substr($path, strlen($root)) : $path;
+    }
+    
+    /**
+     * Project name (theme folder) from .lando.yml.
+     *
+     * @return string
+     */
+    private function get_project_name() {
+        $lando_config_path = getcwd() . '/.lando.yml';
+        
+        if (file_exists($lando_config_path)) {
+            $lando_config = (string) file_get_contents($lando_config_path);
+            // The value only: stop at whitespace or a trailing "# comment".
+            if (preg_match('/^name:\s*([^\s#]+)/m', $lando_config, $matches)) {
+                return $matches[1];
             }
+        }
+        
+        return 'custom-theme';
+    }
+    
+    /**
+     * Create the project theme from Compass.
+     *
+     * Clones Compass as editable source into wp-content/themes/<project>,
+     * removes its git history, renames every form of the Compass name, adds the
+     * theme to npm workspaces and installs its Composer dependencies. Never
+     * overwrites an existing theme.
+     */
+    private function create_project_theme() {
+        $project_name = $this->get_project_name();
+        $theme_path   = getcwd() . '/wp-content/themes/' . $project_name;
+        
+        if (file_exists($theme_path)) {
+            WP_CLI::error("wp-content/themes/{$project_name} already exists. Remove it or choose another project name; setup never overwrites a theme.");
+        }
+        
+        WP_CLI::line('Cloning Compass (' . self::COMPASS_BRANCH . ") into wp-content/themes/{$project_name}...");
+        $this->exec(sprintf(
+            'git clone --depth 1 --branch %s %s %s',
+            escapeshellarg(self::COMPASS_BRANCH),
+            escapeshellarg(self::COMPASS_REPO),
+            escapeshellarg($theme_path)
+        ));
+        
+        $this->remove_git_references($theme_path);
+        
+        WP_CLI::line("Renaming Compass to {$project_name}...");
+        $renamer   = new ThemeRenamer($project_name);
+        $leftovers = $renamer->rename($theme_path);
+        $this->update_theme_metadata($theme_path, $project_name);
+        
+        if ($leftovers) {
+            WP_CLI::warning('These lines still mention "compass" (other themes, icon names or prose). Review them:');
+            foreach ($leftovers as $line) {
+                WP_CLI::line('  ' . $line);
+            }
+        }
+        WP_CLI::success("Created theme: {$project_name}");
+        
+        $this->add_theme_to_workspaces($project_name);
+        
+        WP_CLI::line('Installing theme Composer dependencies...');
+        $result = $this->exec('lando composer install --working-dir=' . escapeshellarg('wp-content/themes/' . $project_name), false);
+        if ($result->return_code !== 0) {
+            WP_CLI::warning("Theme Composer install failed. Run it in wp-content/themes/{$project_name} manually.");
         }
     }
     

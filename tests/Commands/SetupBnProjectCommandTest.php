@@ -128,7 +128,11 @@ final class SetupBnProjectCommandTest extends CliTestCase
 		$this->assertStringEndsWith("}\n", (string) file_get_contents($theme . '/package.json'));
 
 		$composer = json_decode((string) file_get_contents($theme . '/composer.json'), true);
-		$this->assertSame(['name' => 'custom/my-cool-theme', 'type' => 'wordpress-theme'], $composer);
+		$this->assertSame([
+			'name'         => 'custom/my-cool-theme',
+			'type'         => 'wordpress-theme',
+			'repositories' => [['type' => 'composer', 'url' => 'https://raw.githubusercontent.com/builtnorth/registry/main']],
+		], $composer);
 
 		$this->assertStringContainsString('Success: Theme metadata updated', $this->logger->stdout);
 	}
@@ -155,5 +159,94 @@ final class SetupBnProjectCommandTest extends CliTestCase
 
 		$this->assertSame('{not json', file_get_contents($theme . '/package.json'));
 		$this->assertSame('', file_get_contents($theme . '/composer.json'));
+	}
+
+	// ---------------------------------------------------------------------
+	// get_project_name / create_project_theme
+	// ---------------------------------------------------------------------
+
+	public function test_get_project_name_reads_lando_name(): void
+	{
+		file_put_contents($this->tmp->path('.lando.yml'), "name: client-site\nrecipe: wordpress\n");
+
+		$this->assertSame('client-site', $this->in_tmp(fn () => $this->invoke($this->command, 'get_project_name')));
+	}
+
+	public function test_get_project_name_ignores_a_trailing_comment(): void
+	{
+		file_put_contents($this->tmp->path('.lando.yml'), "name: client-site # Name must be unique for each app!\nrecipe: wordpress\n");
+
+		$this->assertSame('client-site', $this->in_tmp(fn () => $this->invoke($this->command, 'get_project_name')));
+	}
+
+	public function test_get_project_name_defaults_without_lando_file(): void
+	{
+		$this->assertSame('custom-theme', $this->in_tmp(fn () => $this->invoke($this->command, 'get_project_name')));
+	}
+
+	public function test_create_project_theme_never_overwrites_an_existing_theme(): void
+	{
+		file_put_contents($this->tmp->path('.lando.yml'), "name: client-site\n");
+		mkdir($this->tmp->path('wp-content/themes/client-site'), 0755, true);
+		file_put_contents($this->tmp->path('wp-content/themes/client-site/style.css'), 'keep');
+
+		$this->expectException(\WP_CLI\ExitException::class);
+
+		try {
+			$this->in_tmp(fn () => $this->invoke($this->command, 'create_project_theme'));
+		} finally {
+			$this->assertSame('keep', file_get_contents($this->tmp->path('wp-content/themes/client-site/style.css')));
+		}
+	}
+
+	public function test_generate_auth_file_keeps_an_existing_file(): void
+	{
+		file_put_contents($this->tmp->path('auth.json'), '{"keep":true}');
+
+		$this->in_tmp(fn () => $this->invoke($this->command, 'generate_auth_file'));
+
+		$this->assertSame('{"keep":true}', file_get_contents($this->tmp->path('auth.json')));
+	}
+
+	public function test_generate_salts_replaces_placeholders_only(): void
+	{
+		$env = $this->tmp->path('.env');
+		file_put_contents($env, "WP_ENV=development\nAUTH_KEY=generate\nNONCE_SALT=generate\nSAMPLE_API='abc'\n");
+
+		$this->invoke($this->command, 'generate_salts', [$env]);
+
+		$lines = file($env, FILE_IGNORE_NEW_LINES);
+		$this->assertSame('WP_ENV=development', $lines[0]);
+		$this->assertMatchesRegularExpression('/^AUTH_KEY=[0-9a-f]{64}$/', $lines[1]);
+		$this->assertMatchesRegularExpression('/^NONCE_SALT=[0-9a-f]{64}$/', $lines[2]);
+		$this->assertNotSame($lines[1], 'AUTH_KEY=' . substr($lines[2], 11));
+		$this->assertSame("SAMPLE_API='abc'", $lines[3]);
+	}
+
+	public function test_project_relative_path_for_lando_commands(): void
+	{
+		$relative = $this->in_tmp(fn () => $this->invoke($this->command, 'project_relative_path', [$this->tmp->path('setup/data/content/content.xml')]));
+
+		$this->assertSame('setup/data/content/content.xml', $relative);
+		$this->assertSame('/elsewhere/file.xml', $this->in_tmp(fn () => $this->invoke($this->command, 'project_relative_path', ['/elsewhere/file.xml'])));
+	}
+
+	/**
+	 * Run a callback with the temp dir as the working directory.
+	 *
+	 * @template T
+	 * @param callable(): T $callback
+	 * @return T
+	 */
+	private function in_tmp(callable $callback): mixed
+	{
+		$previous = getcwd();
+		chdir($this->tmp->path());
+
+		try {
+			return $callback();
+		} finally {
+			chdir((string) $previous);
+		}
 	}
 }
