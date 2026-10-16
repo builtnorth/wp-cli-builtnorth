@@ -109,7 +109,9 @@ class SetupCommand extends BaseCommand {
                 WP_CLI::success('Database created successfully');
             } else {
                 // Check if it's just because database already exists
-                $check_result = $this->exec('lando wp db check', false);
+                // `wp db query`, not `wp db check`: mysqlcheck in Lando's PHP 8.4 image is
+                // MariaDB's and fails TLS verification against MySQL.
+                $check_result = $this->exec('lando wp db query "SELECT 1"', false);
                 if ($check_result->return_code === 0) {
                     WP_CLI::line('Database already exists and is accessible');
                 } else {
@@ -179,7 +181,7 @@ class SetupCommand extends BaseCommand {
             WP_CLI::success('WordPress installation verified!');
             WP_CLI::line('');
             WP_CLI::line("Frontend: {$url}");
-            WP_CLI::line("Admin: {$url}/app/wp-admin");
+            WP_CLI::line("Admin: {$url}/wp/wp-admin");
             WP_CLI::line("Username: {$username}");
             WP_CLI::line("Password: {$password}");
         } else {
