@@ -211,7 +211,7 @@ final class SetupBnProjectCommandTest extends CliTestCase
 	public function test_generate_salts_replaces_placeholders_only(): void
 	{
 		$env = $this->tmp->path('.env');
-		file_put_contents($env, "WP_ENV=development\nAUTH_KEY=generate\nNONCE_SALT=generate\nSAMPLE_API='abc'\n");
+		file_put_contents($env, "WP_ENV=development\nAUTH_KEY=generate\nNONCE_SALT=generate\nSAMPLE_API='abc'\nSIRATIK_SECRET_CIPHER_KEY=generate\n");
 
 		$this->invoke($this->command, 'generate_salts', [$env]);
 
@@ -221,6 +221,7 @@ final class SetupBnProjectCommandTest extends CliTestCase
 		$this->assertMatchesRegularExpression('/^NONCE_SALT=[0-9a-f]{64}$/', $lines[2]);
 		$this->assertNotSame($lines[1], 'AUTH_KEY=' . substr($lines[2], 11));
 		$this->assertSame("SAMPLE_API='abc'", $lines[3]);
+		$this->assertMatchesRegularExpression('/^SIRATIK_SECRET_CIPHER_KEY=[0-9a-f]{64}$/', $lines[4]);
 	}
 
 	public function test_project_relative_path_for_lando_commands(): void
@@ -229,6 +230,40 @@ final class SetupBnProjectCommandTest extends CliTestCase
 
 		$this->assertSame('setup/data/content/content.xml', $relative);
 		$this->assertSame('/elsewhere/file.xml', $this->in_tmp(fn () => $this->invoke($this->command, 'project_relative_path', ['/elsewhere/file.xml'])));
+	}
+
+	public function test_validate_theme_package_accepts_composer_names(): void
+	{
+		$this->assertSame('builtnorth/kitaris-theme', $this->invoke($this->command, 'validate_theme_package', [' BuiltNorth/Kitaris-Theme ']));
+	}
+
+	/**
+	 * @return array<string, array{string}>
+	 */
+	public static function bad_theme_packages(): array
+	{
+		return [
+			'no vendor'      => ['kitaris-theme'],
+			'git url'        => ['git@github.com:builtnorth/kitaris-theme.git'],
+			'shell chars'    => ['builtnorth/theme; rm -rf /'],
+			'with version'   => ['builtnorth/kitaris-theme:^1.0'],
+			'path traversal' => ['../theme'],
+		];
+	}
+
+	/**
+	 * @dataProvider bad_theme_packages
+	 */
+	public function test_validate_theme_package_rejects_anything_else(string $package): void
+	{
+		$this->expectException(\WP_CLI\ExitException::class);
+		$this->invoke($this->command, 'validate_theme_package', [$package]);
+	}
+
+	public function test_theme_slug_from_show_path(): void
+	{
+		$this->assertSame('compass', $this->invoke($this->command, 'theme_slug_from_show_path', ["builtnorth/compass /app/wp-content/themes/compass\n"]));
+		$this->assertNull($this->invoke($this->command, 'theme_slug_from_show_path', ["kitaris/seo /app/wp-content/plugins/kitaris-seo\n"]));
 	}
 
 	/**

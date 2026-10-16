@@ -34,6 +34,21 @@ class SetupBnProjectCommand extends BaseCommand {
     /** Branch of Compass to start from. */
     private const COMPASS_BRANCH = 'main';
 
+    /**
+     * Composer package of a shared, released theme (--theme), or null to clone
+     * and rename Compass.
+     *
+     * @var string|null
+     */
+    private $theme_package = null;
+
+    /**
+     * Folder of the shared theme once installed (wp-content/themes/<slug>).
+     *
+     * @var string|null
+     */
+    private $theme_slug = null;
+
     /** Private Composer index for Built North packages (the theme needs kitaris/framework). */
     private const REGISTRY_URL = 'https://raw.githubusercontent.com/builtnorth/registry/main';
     
@@ -65,6 +80,11 @@ class SetupBnProjectCommand extends BaseCommand {
      * 
      * [--skip-wordpress]
      * : Skip WordPress installation
+     *
+     * [--theme=<package>]
+     * : Install a shared, released theme from the Built North registry instead
+     * of cloning Compass, e.g. builtnorth/kitaris-theme. The theme isn't renamed
+     * and updates with `composer update`.
      * 
      * ## EXAMPLES
      * 
@@ -93,6 +113,10 @@ class SetupBnProjectCommand extends BaseCommand {
             $reset_confirmed = true;
             
             WP_CLI::line('');
+        }
+        
+        if (!empty($assoc_args['theme'])) {
+            $this->theme_package = $this->validate_theme_package((string) $assoc_args['theme']);
         }
         
         // Collect project information
@@ -180,7 +204,8 @@ class SetupBnProjectCommand extends BaseCommand {
     }
     
     /**
-     * Replace "KEY=generate" salt placeholders with random values.
+     * Replace "KEY=generate" placeholders (salts, SIRATIK_SECRET_CIPHER_KEY)
+     * with random values.
      *
      * 64 hex characters: safe unquoted for both phpdotenv and Docker env files.
      *
@@ -193,7 +218,7 @@ class SetupBnProjectCommand extends BaseCommand {
         
         $content = (string) file_get_contents($env_path);
         $content = (string) preg_replace_callback(
-            '/^((?:AUTH|SECURE_AUTH|LOGGED_IN|NONCE)_(?:KEY|SALT))=generate$/m',
+            '/^((?:AUTH|SECURE_AUTH|LOGGED_IN|NONCE)_(?:KEY|SALT)|SIRATIK_SECRET_CIPHER_KEY)=generate$/m',
             static fn ($matches) => $matches[1] . '=' . bin2hex(random_bytes(32)),
             $content
         );
@@ -280,8 +305,12 @@ class SetupBnProjectCommand extends BaseCommand {
         WP_CLI::line('Installing Composer dependencies...');
         $this->exec('lando composer install');
 
-        // Project theme: clone Compass, rename it, install its dependencies
-        $this->create_project_theme();
+        // Theme: a shared released theme (--theme), or Compass cloned and renamed
+        if ($this->theme_package !== null) {
+            $this->install_shared_theme($this->theme_package);
+        } else {
+            $this->create_project_theme();
+        }
         
         // Theme & plugin composer
         $progress->tick();
@@ -397,7 +426,7 @@ class SetupBnProjectCommand extends BaseCommand {
         if (!empty($config['username'])) {
             WP_CLI::line('');
             WP_CLI::line('WordPress login info:');
-            WP_CLI::line("URL: {$config['url']}/wp/wp-admin");
+            WP_CLI::line("URL: {$config['url']}/app/wp-admin");
             WP_CLI::line("Username: {$config['username']}");
             WP_CLI::line("Password: {$config['password']}");
             WP_CLI::line("Email: {$config['email']}");
@@ -490,9 +519,10 @@ class SetupBnProjectCommand extends BaseCommand {
         
         $project_root    = getcwd();
         $themes_dest_dir = $project_root . '/wp-content/themes';
-        $project_name    = $this->get_project_name();
+        $project_name    = $this->theme_slug ?? $this->get_project_name();
         
-        // The project theme was created from Compass in install_dependencies()
+        // The theme was installed in install_dependencies(): a shared theme from
+        // Composer (--theme) or the project theme cloned from Compass
         if (is_dir($themes_dest_dir . '/' . $project_name)) {
             WP_CLI::line("Activating {$project_name} theme...");
             $activate_result = $this->exec('lando wp theme activate ' . escapeshellarg($project_name), false);
@@ -856,6 +886,60 @@ class SetupBnProjectCommand extends BaseCommand {
         }
         
         return 'custom-theme';
+    }
+    
+    /**
+     * Validate a --theme value: a Composer package name (vendor/name).
+     *
+     * @param string $package
+     * @return string
+     */
+    private function validate_theme_package($package) {
+        $package = strtolower(trim($package));
+        
+        if (!preg_match('#^[a-z0-9]([_.-]?[a-z0-9]+)*/[a-z0-9]([_.-]?[a-z0-9]+)*$#', $package)) {
+            WP_CLI::error("--theme must be a Composer package name like builtnorth/kitaris-theme (got \"{$package}\").");
+        }
+        
+        return $package;
+    }
+    
+    /**
+     * Install a shared, released theme with Composer.
+     *
+     * The theme comes from its release zip (bundled vendor/) through the
+     * registry, into the folder its installer-name sets. It isn't renamed or
+     * added to npm workspaces: it ships built and updates with the site.
+     *
+     * @param string $package Composer package, e.g. builtnorth/kitaris-theme.
+     */
+    private function install_shared_theme($package) {
+        WP_CLI::line("Installing shared theme {$package}...");
+        $this->exec('lando composer require ' . escapeshellarg($package . ':*') . ' --no-interaction');
+        
+        $result = $this->exec('lando composer show ' . escapeshellarg($package) . ' --path', false);
+        $this->theme_slug = $this->theme_slug_from_show_path((string) $result->stdout);
+        
+        if ($this->theme_slug === null) {
+            WP_CLI::error("Installed {$package} but couldn't find its theme folder.");
+        }
+        
+        WP_CLI::success("Installed theme: {$this->theme_slug}");
+    }
+    
+    /**
+     * Theme folder from `composer show <package> --path` output
+     * ("builtnorth/compass /app/wp-content/themes/compass").
+     *
+     * @param string $output
+     * @return string|null
+     */
+    private function theme_slug_from_show_path($output) {
+        if (preg_match('#/wp-content/themes/([^/\s]+)/?\s*$#m', $output, $matches)) {
+            return $matches[1];
+        }
+        
+        return null;
     }
     
     /**

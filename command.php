@@ -87,10 +87,15 @@ if (!class_exists('BuiltNorth_Command')) {
          * [--yes]
          * : Skip confirmation prompt for existing installations
          *
+         * [--theme=<package>]
+         * : Install a shared, released theme from the Built North registry instead
+         * of cloning Compass, e.g. builtnorth/kitaris-theme.
+         *
          * ## EXAMPLES
          *
          *     wp builtnorth setup-bn-project --name="My Project"
          *     wp builtnorth setup-bn-project --name="My Project" --yes
+         *     wp builtnorth setup-bn-project --name="Kitaris Store" --theme=builtnorth/kitaris-theme
          *
          * @when before_wp_load
          * @subcommand setup-bn-project
