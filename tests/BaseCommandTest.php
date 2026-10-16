@@ -132,6 +132,23 @@ final class BaseCommandTest extends CliTestCase
 		}
 	}
 
+	public function test_with_path_hands_the_callers_path_to_the_shell(): void
+	{
+		$previous = getenv('PATH');
+		putenv('PATH=/opt/example/bin:/usr/bin:/bin');
+
+		try {
+			$command = $this->invoke($this->command(), 'with_path', ['echo "$PATH"']);
+		} finally {
+			putenv('PATH=' . $previous);
+		}
+
+		// Run it the way WP_CLI::launch does when $_ENV is empty: no PATH set.
+		$output = shell_exec('env -i /bin/sh -c ' . escapeshellarg($command));
+
+		$this->assertSame('/opt/example/bin:/usr/bin:/bin', trim((string) $output));
+	}
+
 	private function command(): BaseCommand
 	{
 		return new class () extends BaseCommand {

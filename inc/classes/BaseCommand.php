@@ -58,14 +58,35 @@ abstract class BaseCommand {
      */
     protected function exec($command, $exit_on_error = true) {
         WP_CLI::debug("Executing: $command");
-        
-        $result = WP_CLI::launch($command, false, true);
+
+        $result = WP_CLI::launch(self::with_path($command), false, true);
         
         if ($exit_on_error && $result->return_code !== 0) {
             WP_CLI::error("Command failed: $command");
         }
         
         return $result;
+    }
+
+    /**
+     * Prefix a command with the caller's PATH.
+     *
+     * WP_CLI::launch() hands child processes PHP's $_ENV, which is empty under
+     * the default variables_order (GPCS). The shell then falls back to its own
+     * minimal PATH and can't find lando, gh, composer or npm installed in
+     * Homebrew or ~/.lando/bin. getenv() still sees the real PATH.
+     *
+     * @param string $command
+     * @return string
+     */
+    protected static function with_path($command) {
+        $path = getenv('PATH');
+
+        if (!is_string($path) || $path === '') {
+            return $command;
+        }
+
+        return 'export PATH=' . escapeshellarg($path) . '; ' . $command;
     }
     
     /**
