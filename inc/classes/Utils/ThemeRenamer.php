@@ -27,6 +27,17 @@ class ThemeRenamer {
     /** Files that are never touched. */
     private const SKIP_FILES = [ '.gitignore', 'composer.lock', 'package-lock.json' ];
 
+    /**
+     * Names owned by the framework and its packages. A theme named after one
+     * (or after a kitaris-/siratik- plugin) would share its namespace, constants
+     * and hook prefix: `namespace Kitaris` makes the theme's App::get_instance()
+     * resolve to Kitaris\App and boot the framework a second time. Such names get
+     * a "-theme" suffix for every code identifier; the folder keeps its name.
+     */
+    private const RESERVED_NAMES = [ 'kitaris', 'siratik', 'builtnorth', 'wordpress', 'wp', 'compass' ];
+
+    private const RESERVED_PREFIXES = [ 'kitaris-', 'siratik-' ];
+
     /** Text files the rename applies to. */
     private const EXTENSIONS = [ 'php', 'html', 'json', 'js', 'mjs', 'cjs', 'jsx', 'ts', 'tsx', 'css', 'scss', 'md', 'txt', 'yml', 'yaml', 'xml', 'pot' ];
 
@@ -42,9 +53,9 @@ class ThemeRenamer {
      * @param string $slug Project slug, e.g. "client-site" (lowercase, hyphens).
      */
     public function __construct( string $slug ) {
-        $this->slug = $slug;
+        $this->slug = self::identifier_slug( $slug );
 
-        $words = array_values( array_filter( explode( '-', $slug ), 'strlen' ) );
+        $words = array_values( array_filter( explode( '-', $this->slug ), 'strlen' ) );
 
         $pascal = implode( '', array_map( 'ucfirst', $words ) );
         // Namespaces and constants can't start with a digit.
@@ -54,6 +65,19 @@ class ThemeRenamer {
         $this->upper = preg_match( '/^[A-Z]/', $upper ) ? $upper : 'THEME_' . $upper;
 
         $this->name = ucwords( implode( ' ', $words ) );
+    }
+
+    /**
+     * Slug used for code identifiers: the project slug, or "<slug>-theme" when it
+     * would collide with the framework or a Kitaris/Siratik plugin.
+     */
+    public static function identifier_slug( string $slug ): string {
+        $reserved = in_array( $slug, self::RESERVED_NAMES, true );
+        foreach ( self::RESERVED_PREFIXES as $prefix ) {
+            $reserved = $reserved || str_starts_with( $slug, $prefix );
+        }
+
+        return $reserved ? $slug . '-theme' : $slug;
     }
 
     public function slug(): string {

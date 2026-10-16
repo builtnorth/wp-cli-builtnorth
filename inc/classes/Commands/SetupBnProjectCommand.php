@@ -971,7 +971,13 @@ class SetupBnProjectCommand extends BaseCommand {
         WP_CLI::line("Renaming Compass to {$project_name}...");
         $renamer   = new ThemeRenamer($project_name);
         $leftovers = $renamer->rename($theme_path);
-        $this->update_theme_metadata($theme_path, $project_name);
+        // The renamer's slug, not the project name: a reserved name such as
+        // "kitaris" becomes "kitaris-theme" so the text domain and package
+        // names don't collide with the framework's.
+        $this->update_theme_metadata($theme_path, $renamer->slug());
+        if ($renamer->slug() !== $project_name) {
+            WP_CLI::line("\"{$project_name}\" is reserved by the framework; theme code uses \"{$renamer->slug()}\" (namespace {$renamer->pascal()}, constants {$renamer->upper()}_*).");
+        }
         
         if ($leftovers) {
             WP_CLI::warning('These lines still mention "compass" (other themes, icon names or prose). Review them:');

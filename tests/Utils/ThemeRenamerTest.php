@@ -33,6 +33,39 @@ final class ThemeRenamerTest extends TestCase
 		$this->assertSame('Client Site', $renamer->name());
 	}
 
+	/**
+	 * @return array<string, array{string, string}>
+	 */
+	public static function reserved_slugs(): array
+	{
+		return [
+			'framework name'   => ['kitaris', 'kitaris-theme'],
+			'vendor name'      => ['siratik', 'siratik-theme'],
+			'kitaris plugin'   => ['kitaris-store', 'kitaris-store-theme'],
+			'siratik package'  => ['siratik-utility', 'siratik-utility-theme'],
+			'wordpress'        => ['wp', 'wp-theme'],
+			'ordinary name'    => ['client-site', 'client-site'],
+			'contains kitaris' => ['my-kitaris', 'my-kitaris'],
+		];
+	}
+
+	/**
+	 * @dataProvider reserved_slugs
+	 */
+	public function test_identifier_slug_avoids_framework_names(string $slug, string $expected): void
+	{
+		$this->assertSame($expected, ThemeRenamer::identifier_slug($slug));
+	}
+
+	public function test_reserved_name_never_produces_the_framework_namespace(): void
+	{
+		$renamer = new ThemeRenamer('kitaris');
+
+		$this->assertSame('KitarisTheme', $renamer->pascal());
+		$this->assertSame('KITARIS_THEME', $renamer->upper());
+		$this->assertSame("namespace KitarisTheme;\ndefine('KITARIS_THEME_URL', 1);", $renamer->rename_content("namespace Compass;\ndefine('COMPASS_URL', 1);"));
+	}
+
 	public function test_name_variants_never_start_with_a_digit(): void
 	{
 		$renamer = new ThemeRenamer('360-media');
