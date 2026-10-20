@@ -1,4 +1,4 @@
-# BuiltNorth WP-CLI Commands
+# Built North WP-CLI Commands
 
 A modular WP-CLI package for BuiltNorth WordPress development workflows.
 
@@ -149,3 +149,7 @@ class ExportCommand extends BaseCommand {
 - **Commands** - Individual command implementations
 
 This modular structure allows easy addition of new commands like import/export, migration tools, and more.
+
+## License
+
+GPL-3.0-or-later — see `LICENSE`.
