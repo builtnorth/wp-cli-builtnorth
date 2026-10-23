@@ -245,14 +245,16 @@ class SetupBnProjectCommand extends BaseCommand {
      * Generate auth.json for private Built North packages.
      *
      * Composer needs a GitHub token for the private registry and plugin
-     * releases. Built from the GitHub CLI login; the Lando build step copies it
-     * into the container's global Composer home. auth.json is gitignored and
-     * kept if it already exists.
+     * releases. Built from the GitHub CLI login and read by Composer from the
+     * project root, which is also the web root: the starter's .gitignore and
+     * nginx config must keep auth.json out of git and unserved. Kept (and
+     * made owner-only) if it already exists.
      */
     private function generate_auth_file() {
         $auth_path = getcwd() . '/auth.json';
-        
+
         if (file_exists($auth_path)) {
+            chmod($auth_path, 0600);
             WP_CLI::line('Using existing auth.json');
             return;
         }
@@ -275,10 +277,13 @@ class SetupBnProjectCommand extends BaseCommand {
             ],
         ];
         
+        // Owner-only from the moment it exists, not after a world-readable write.
+        $umask = umask(0077);
         file_put_contents($auth_path, json_encode($auth, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+        umask($umask);
         chmod($auth_path, 0600);
-        
-        WP_CLI::success('auth.json created (gitignored)');
+
+        WP_CLI::success('auth.json created (owner-only; keep it out of git)');
     }
     
     /**
