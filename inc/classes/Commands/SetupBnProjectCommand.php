@@ -81,6 +81,15 @@ class SetupBnProjectCommand extends BaseCommand {
      * [--skip-wordpress]
      * : Skip WordPress installation
      *
+     * [--skip-content]
+     * : Don't import the starter pages and example blocks (setup/data/content/)
+     *
+     * [--skip-media]
+     * : Don't import the starter images, site logo and icon (setup/data/images/)
+     *
+     * [--yes]
+     * : Don't ask before replacing an existing WordPress install
+     *
      * [--theme=<package>]
      * : Install a shared, released theme from the Built North registry instead
      * of cloning Compass, e.g. builtnorth/kitaris-theme. The theme isn't renamed
@@ -90,6 +99,7 @@ class SetupBnProjectCommand extends BaseCommand {
      * 
      *     wp builtnorth setup-bn-project --name="My Project"
      *     wp builtnorth setup-bn-project --name="My Project" --skip-wordpress
+     *     wp builtnorth setup-bn-project --name="My Project" --skip-content --skip-media
      * 
      * @when before_wp_load
      */
@@ -167,6 +177,9 @@ class SetupBnProjectCommand extends BaseCommand {
         
         // URL
         $config['url'] = "https://{$config['sitename']}.lndo.site";
+        
+        $config['skip_content'] = !empty($assoc_args['skip-content']);
+        $config['skip_media']   = !empty($assoc_args['skip-media']);
         
         return $config;
     }
@@ -507,7 +520,7 @@ class SetupBnProjectCommand extends BaseCommand {
         $this->configure_settings();
         
         // Import content and media
-        $this->import_content_and_media();
+        $this->import_content_and_media($config['skip_content'], $config['skip_media']);
         
         // Setup home and blog pages
         $this->setup_pages();
@@ -612,15 +625,20 @@ class SetupBnProjectCommand extends BaseCommand {
     
     /**
      * Import content and media
+     *
+     * @param bool $skip_content Skip setup/data/content/ (--skip-content).
+     * @param bool $skip_media   Skip setup/data/images/ (--skip-media).
      */
-    private function import_content_and_media() {
+    private function import_content_and_media($skip_content = false, $skip_media = false) {
         $project_root = getcwd();
         
         // Check for content files to import
         $content_dir = $project_root . '/setup/data/content';
         $content_files = [];
         
-        if (is_dir($content_dir)) {
+        if ($skip_content) {
+            WP_CLI::line('Skipping content import (--skip-content)');
+        } elseif (is_dir($content_dir)) {
             $content_files = glob($content_dir . '/*.xml');
         }
         
@@ -650,7 +668,7 @@ class SetupBnProjectCommand extends BaseCommand {
                     WP_CLI::success('Imported ' . basename($file));
                 }
             }
-        } else {
+        } elseif (!$skip_content) {
             WP_CLI::line('No content files found in setup/data/content/');
         }
         
@@ -659,7 +677,9 @@ class SetupBnProjectCommand extends BaseCommand {
         $logo_id = null;
         $icon_id = null;
         
-        if (is_dir($images_dir)) {
+        if ($skip_media) {
+            WP_CLI::line('Skipping media import (--skip-media)');
+        } elseif (is_dir($images_dir)) {
             $image_extensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
             $media_files = [];
             

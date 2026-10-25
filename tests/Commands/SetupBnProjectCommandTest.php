@@ -77,6 +77,8 @@ final class SetupBnProjectCommandTest extends CliTestCase
 			'password'          => 'secret',
 			'email'             => 'boss@example.com',
 			'url'               => 'https://my-project.lndo.site',
+			'skip_content'      => false,
+			'skip_media'        => false,
 		], $config);
 	}
 
@@ -91,7 +93,22 @@ final class SetupBnProjectCommandTest extends CliTestCase
 			'sitename_original' => 'Acme',
 			'sitename'          => 'acme',
 			'url'               => 'https://acme.lndo.site',
+			'skip_content'      => false,
+			'skip_media'        => false,
 		], $config);
+	}
+
+	public function test_collect_setup_info_reads_the_skip_import_flags(): void
+	{
+		$config = $this->invoke($this->command, 'collect_setup_info', [[
+			'name'           => 'Acme',
+			'skip-wordpress' => true,
+			'skip-content'   => true,
+			'skip-media'     => true,
+		]]);
+
+		$this->assertTrue($config['skip_content']);
+		$this->assertTrue($config['skip_media']);
 	}
 
 	// ---------------------------------------------------------------------

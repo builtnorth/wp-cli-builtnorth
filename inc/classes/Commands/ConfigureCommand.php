@@ -65,8 +65,7 @@ class ConfigureCommand extends BaseCommand {
             }
             
             if (empty($assoc_args['skip-content'])) {
-                WP_CLI::line('  - Import new pages and content from setup-data/content.xml');
-                WP_CLI::line('  - Import example blocks from setup-data/example-blocks.xml');
+                WP_CLI::line('  - Import pages and content from setup/data/content/*.xml');
             }
             
             if (empty($assoc_args['skip-media'])) {
@@ -206,9 +205,9 @@ class ConfigureCommand extends BaseCommand {
      */
     private function import_media($assoc_args) {
         $media_files = [
-            'logo' => './setup-data/images/logo.png',
-            'icon' => './setup-data/images/icon.png',
-            'placeholder' => './setup-data/images/placeholder-image-canyon.jpg'
+            'logo' => './setup/data/images/logo.png',
+            'icon' => './setup/data/images/icon.png',
+            'placeholder' => './setup/data/images/placeholder-image-canyon.jpg'
         ];
         
         foreach ($media_files as $type => $file) {
@@ -243,18 +242,16 @@ class ConfigureCommand extends BaseCommand {
      * Import content from XML files
      */
     private function import_content($assoc_args) {
-        $import_files = [
-            './setup-data/content.xml',
-            './setup-data/example-blocks.xml'
-        ];
+        // Same folder setup-bn-project imports from.
+        $import_files = glob('./setup/data/content/*.xml') ?: [];
+        
+        if ($import_files === []) {
+            WP_CLI::warning('No content files found in setup/data/content/');
+            return;
+        }
         
         foreach ($import_files as $file) {
-            if (!file_exists($file)) {
-                WP_CLI::warning("Import file not found: $file");
-                continue;
-            }
-            
-            $this->run_wp_command("import $file --authors=create");
+            $this->run_wp_command('import ' . escapeshellarg($file) . ' --authors=create');
         }
     }
     
