@@ -113,6 +113,36 @@ final class SetupBnProjectCommandTest extends CliTestCase
 		$this->assertStringContainsString("\$wpdb->update(", $php);
 	}
 
+	public function test_starter_option_commands_pass_each_value_as_json(): void
+	{
+		$commands = SetupBnProjectCommand::starter_option_commands([
+			'kitaris_site_policies' => ['privacy_page' => '12', 'note' => "It's {{x}}"],
+			'default_comment_status' => 'closed',
+			'posts_per_page'         => 10,
+		]);
+
+		$this->assertSame(
+			"lando wp option update 'kitaris_site_policies' '{\"privacy_page\":\"12\",\"note\":\"It'\\''s {{x}}\"}' --format=json",
+			$commands['kitaris_site_policies']
+		);
+		$this->assertSame("lando wp option update 'default_comment_status' '\"closed\"' --format=json", $commands['default_comment_status']);
+		$this->assertSame("lando wp option update 'posts_per_page' '10' --format=json", $commands['posts_per_page']);
+	}
+
+	/**
+	 * Every `$this->method(` the command calls is a method of the class, so a
+	 * step the install reaches only on a real site can't call nothing.
+	 */
+	public function test_every_method_the_command_calls_exists(): void
+	{
+		$source = (string) file_get_contents((new \ReflectionClass(SetupBnProjectCommand::class))->getFileName());
+		preg_match_all('/\$this->([a-zA-Z_][a-zA-Z0-9_]*)\(/', $source, $matches);
+
+		foreach (array_unique($matches[1]) as $method) {
+			$this->assertTrue(method_exists(SetupBnProjectCommand::class, $method), "SetupBnProjectCommand calls missing method {$method}()");
+		}
+	}
+
 	public function test_admin_display_name_is_the_site_name_and_team(): void
 	{
 		$this->assertSame('Acme Co Team', SetupBnProjectCommand::admin_display_name(' Acme Co '));

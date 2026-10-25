@@ -737,7 +737,8 @@ class SetupBnProjectCommand extends BaseCommand {
                 WP_CLI::line('Importing ' . count($media_files) . ' media file(s)...');
                 
                 foreach ($media_files as $file) {
-                    $media_result = $this->exec('lando wp media import ' . escapeshellarg($this->project_relative_path($file)) . ' --porcelain', false);
+                    // As the admin: JSON (Lottie) uploads are allowed only for a user who can manage options.
+                    $media_result = $this->exec('lando wp media import ' . escapeshellarg($this->project_relative_path($file)) . ' --porcelain' . ($username !== '' ? ' --user=' . escapeshellarg($username) : ''), false);
                     if ($media_result->return_code !== 0) {
                         WP_CLI::warning('Failed to import media ' . basename($file));
                     } else {
@@ -776,6 +777,48 @@ class SetupBnProjectCommand extends BaseCommand {
         }
     }
     
+    /**
+     * Save the starter's setup/data/options.json, with page slugs and the site
+     * name filled in (the same options configure saves).
+     *
+     * @param string $site_name
+     */
+    private function apply_starter_options($site_name) {
+        $options = StarterOptions::read(getcwd() . '/' . StarterOptions::FILE);
+        if (!$options) {
+            return;
+        }
+
+        $resolved = StarterOptions::resolve($options, fn(string $slug): int => $this->page_id_by_slug($slug), (string) $site_name);
+
+        foreach (self::starter_option_commands($resolved) as $name => $command) {
+            $result = $this->exec($command, false);
+            if ($result->return_code === 0) {
+                WP_CLI::success("Saved the {$name} option");
+            } else {
+                WP_CLI::warning("Could not save the {$name} option");
+            }
+        }
+    }
+
+    /**
+     * One `lando wp option update` per option, the value passed as JSON so
+     * arrays and numbers keep their type.
+     *
+     * @param array<string, mixed> $options Resolved options.
+     * @return array<string, string> Option name => command.
+     */
+    public static function starter_option_commands(array $options) {
+        $commands = [];
+
+        foreach ($options as $name => $value) {
+            $commands[(string) $name] = 'lando wp option update ' . escapeshellarg((string) $name) . ' '
+                . escapeshellarg((string) json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) . ' --format=json';
+        }
+
+        return $commands;
+    }
+
     /**
      * Give content the featured images in setup/data/featured-images.json
      * ("[post type:]slug" => image file), once both are imported.
