@@ -88,8 +88,8 @@ class SetupBnProjectCommand extends BaseCommand {
      * 
      * ## EXAMPLES
      * 
-     *     wp builtnorth setup --name="My Project"
-     *     wp builtnorth setup --name="My Project" --skip-wordpress
+     *     wp builtnorth setup-bn-project --name="My Project"
+     *     wp builtnorth setup-bn-project --name="My Project" --skip-wordpress
      * 
      * @when before_wp_load
      */
