@@ -115,6 +115,7 @@ class ThemeRenamer {
         }
 
         $this->rename_files( $theme_path );
+        $this->rename_directories( $theme_path );
 
         return $this->leftovers( $theme_path );
     }
@@ -143,6 +144,9 @@ class ThemeRenamer {
             // Variable holding the app instance ($compass->boot()). Before the
             // handle rule, which would otherwise read "compass->" as a handle.
             '/\$compass\b/'                                      => '$theme_app',
+            // Skill folder paths (.claude/skills/compass-tokens/), renamed with
+            // the folders themselves by rename_directories().
+            '#(?<=skills/)compass-#'                              => $this->slug . '-',
             // Handles and classes: compass-editor, not compass-waas / icon names.
             '/(?<![\w\/$-])compass-(?!waas|rose|tool|>)/'        => $this->slug . '-',
             // style.css header: "Text Domain: compass".
@@ -171,6 +175,42 @@ class ThemeRenamer {
             $new = dirname( $file ) . '/' . str_ireplace( 'compass', $this->slug, $base );
             if ( ! file_exists( $new ) ) {
                 rename( $file, $new );
+            }
+        }
+    }
+
+    /**
+     * Rename directories whose name starts with "compass" (e.g. the
+     * .claude/skills/compass-tokens/ skill folders), so each folder keeps
+     * matching the skill name and paths rename_content() rewrote. Deepest
+     * first, so a parent's rename never invalidates a child's path.
+     */
+    private function rename_directories( string $theme_path ): void {
+        $dirs     = [];
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator( $theme_path, FilesystemIterator::SKIP_DOTS ),
+            RecursiveIteratorIterator::SELF_FIRST
+        );
+
+        foreach ( $iterator as $item ) {
+            if ( ! $item->isDir() ) {
+                continue;
+            }
+
+            $relative = substr( $item->getPathname(), strlen( $theme_path ) + 1 );
+            if ( $this->is_skipped( $relative ) || preg_match( '/^compass(?=-|$)/i', $item->getFilename() ) !== 1 ) {
+                continue;
+            }
+
+            $dirs[] = $item->getPathname();
+        }
+
+        usort( $dirs, static fn( string $a, string $b ): int => substr_count( $b, '/' ) <=> substr_count( $a, '/' ) );
+
+        foreach ( $dirs as $dir ) {
+            $new = dirname( $dir ) . '/' . preg_replace( '/^compass(?=-|$)/i', $this->slug, basename( $dir ) );
+            if ( ! file_exists( $new ) ) {
+                rename( $dir, $new );
             }
         }
     }

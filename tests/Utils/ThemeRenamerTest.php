@@ -169,6 +169,22 @@ final class ThemeRenamerTest extends TestCase
 		$this->assertSame([], $left);
 	}
 
+	public function test_rename_renames_skill_folders_to_match_their_names(): void
+	{
+		$this->write('.claude/skills/compass-figma/SKILL.md', "---\nname: compass-figma\n---\n");
+		$this->write('AGENTS.md', "Guides: `.claude/skills/compass-figma/SKILL.md`.\n");
+		$this->write('build/compass-old/x.js', "x\n");
+
+		$left = (new ThemeRenamer('client-site'))->rename($this->tmp->path());
+
+		$this->assertDirectoryDoesNotExist($this->tmp->path('.claude/skills/compass-figma'));
+		$this->assertSame("---\nname: client-site-figma\n---\n", $this->read('.claude/skills/client-site-figma/SKILL.md'));
+		$this->assertSame("Guides: `.claude/skills/client-site-figma/SKILL.md`.\n", $this->read('AGENTS.md'));
+		// Skipped directories keep their names.
+		$this->assertDirectoryExists($this->tmp->path('build/compass-old'));
+		$this->assertSame([], $left);
+	}
+
 	public function test_rename_reports_leftovers(): void
 	{
 		$this->write('inc/notes.php', "<?php\n// Generated compass icon set\n");
