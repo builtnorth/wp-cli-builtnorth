@@ -98,6 +98,22 @@ final class SetupBnProjectCommandTest extends CliTestCase
 		], $config);
 	}
 
+	public function test_privacy_policy_php_is_valid_php_that_publishes_the_page_once(): void
+	{
+		$php = SetupBnProjectCommand::privacy_policy_php(3);
+
+		$file = tempnam(sys_get_temp_dir(), 'privacy');
+		file_put_contents($file, "<?php\n" . $php);
+		exec('php -l ' . escapeshellarg($file) . ' 2>&1', $output, $code);
+		unlink($file);
+
+		$this->assertSame(0, $code, implode("\n", $output));
+		$this->assertStringContainsString("get_post_field('post_content', 3)", $php);
+		$this->assertStringContainsString("strpos(\$content, 'wp:template-part') === false", $php);
+		$this->assertStringContainsString('{"slug":"hero-compliance"}', $php);
+		$this->assertStringContainsString("'post_status' => 'publish'", $php);
+	}
+
 	public function test_collect_setup_info_reads_the_skip_import_flags(): void
 	{
 		$config = $this->invoke($this->command, 'collect_setup_info', [[

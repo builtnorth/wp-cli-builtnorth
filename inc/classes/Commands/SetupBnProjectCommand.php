@@ -4,6 +4,8 @@ namespace BuiltNorth\CLI\Commands;
 
 use BuiltNorth\CLI\BaseCommand;
 use BuiltNorth\CLI\Traits\FileOperationsTrait;
+use BuiltNorth\CLI\Utils\StarterFeaturedImages;
+use BuiltNorth\CLI\Utils\StarterOptions;
 use BuiltNorth\CLI\Utils\ThemeRenamer;
 use WP_CLI;
 
@@ -520,13 +522,16 @@ class SetupBnProjectCommand extends BaseCommand {
         $this->configure_settings();
         
         // Import content and media
-        $this->import_content_and_media($config['skip_content'], $config['skip_media']);
+        $this->import_content_and_media($config['skip_content'], $config['skip_media'], (string) ($config['username'] ?? ''));
         
         // Setup home and blog pages
         $this->setup_pages();
         
         // Clean default content
         $this->clean_default_content();
+        
+        // Organization, site policies, discussion and reading settings
+        $this->apply_starter_options((string) $config['sitename_original']);
     }
     
     /**
@@ -626,10 +631,11 @@ class SetupBnProjectCommand extends BaseCommand {
     /**
      * Import content and media
      *
-     * @param bool $skip_content Skip setup/data/content/ (--skip-content).
-     * @param bool $skip_media   Skip setup/data/images/ (--skip-media).
+     * @param bool   $skip_content Skip setup/data/content/ (--skip-content).
+     * @param bool   $skip_media   Skip setup/data/images/ (--skip-media).
+     * @param string $username     Admin account the imported content is credited to.
      */
-    private function import_content_and_media($skip_content = false, $skip_media = false) {
+    private function import_content_and_media($skip_content = false, $skip_media = false, $username = '') {
         $project_root = getcwd();
         
         // Check for content files to import
@@ -658,15 +664,34 @@ class SetupBnProjectCommand extends BaseCommand {
                 $this->exec('lando wp plugin activate wordpress-importer', false);
             }
             
+            // Credit the content to the admin account setup created, not to the
+            // export's author (which would add a second account).
+            $authors = $username !== ''
+                ? ' --authors=skip --user=' . escapeshellarg($username)
+                : ' --authors=create';
+            
             // Import each XML file
             foreach ($content_files as $file) {
                 WP_CLI::line('Importing: ' . basename($file));
-                $import_result = $this->exec('lando wp import ' . escapeshellarg($this->project_relative_path($file)) . ' --authors=create', false);
+                $import_result = $this->exec('lando wp import ' . escapeshellarg($this->project_relative_path($file)) . $authors, false);
                 if ($import_result->return_code !== 0) {
                     WP_CLI::warning('Failed to import ' . basename($file));
                 } else {
                     WP_CLI::success('Imported ' . basename($file));
                 }
+            }
+            
+            // Only needed for the import.
+            $this->exec('lando wp plugin deactivate wordpress-importer', false);
+            $this->exec('lando wp plugin delete wordpress-importer', false);
+            
+            // Core creates this draft on install, with the site's own URL in it:
+            // publish it under the compliance hero, its text inside a section.
+            $privacy_id = $this->page_id_by_slug('privacy-policy');
+            if ($privacy_id > 0) {
+                // As the admin: without a user, saving filters the block markup.
+                $as_admin = $username !== '' ? ' --user=' . escapeshellarg($username) : '';
+                $this->exec('lando wp eval ' . escapeshellarg(self::privacy_policy_php($privacy_id)) . $as_admin, false);
             }
         } elseif (!$skip_content) {
             WP_CLI::line('No content files found in setup/data/content/');
@@ -721,8 +746,76 @@ class SetupBnProjectCommand extends BaseCommand {
                     $this->exec("lando wp option update site_icon {$icon_id}", false);
                     WP_CLI::success('Set site icon');
                 }
+                
+                $this->apply_featured_images();
             }
         }
+    }
+    
+    /**
+     * Give content the featured images in setup/data/featured-images.json
+     * ("[post type:]slug" => image file), once both are imported.
+     */
+    private function apply_featured_images() {
+        foreach (StarterFeaturedImages::read(getcwd() . '/' . StarterFeaturedImages::FILE) as $entry) {
+            $post_id       = $this->post_id_by_slug($entry['post_type'], $entry['slug']);
+            $attachment_id = $this->post_id_by_slug('attachment', $entry['attachment'], 'inherit');
+            
+            if ($post_id > 0 && $attachment_id > 0) {
+                $this->exec("lando wp post meta update {$post_id} _thumbnail_id {$attachment_id}", false);
+                WP_CLI::success("Set the featured image of {$entry['slug']}");
+            }
+        }
+    }
+    
+    /**
+     * PHP (for `wp eval`) that publishes core's Privacy Policy draft with the
+     * compliance hero part first and core's text inside a section. Runs once:
+     * content that already has a template part is left alone.
+     *
+     * @param int $page_id
+     * @return string
+     */
+    public static function privacy_policy_php($page_id) {
+        $id = (int) $page_id;
+        
+        return <<<PHP
+\$content = (string) get_post_field('post_content', {$id});
+if (strpos(\$content, 'wp:template-part') === false) {
+    \$content = '<!-- wp:template-part {"slug":"hero-compliance"} /-->' . "\n\n"
+        . '<!-- wp:kitaris/section -->' . "\n" . '<div class="wp-block-kitaris-section__inner">' . trim(\$content) . '</div>' . "\n" . '<!-- /wp:kitaris/section -->';
+}
+wp_update_post(['ID' => {$id}, 'post_content' => \$content, 'post_status' => 'publish']);
+PHP;
+    }
+    
+    /**
+     * ID of the page with this slug (any status but trash), or 0.
+     *
+     * @param string $slug
+     * @return int
+     */
+    private function page_id_by_slug($slug) {
+        return $this->post_id_by_slug('page', $slug);
+    }
+    
+    /**
+     * ID of the post of this type and slug, or 0.
+     *
+     * @param string $post_type
+     * @param string $slug
+     * @param string $statuses Comma-separated post statuses.
+     * @return int
+     */
+    private function post_id_by_slug($post_type, $slug, $statuses = 'publish,draft,private,pending') {
+        $result = $this->exec(sprintf(
+            'lando wp post list --post_type=%s --name=%s --post_status=%s --field=ID --posts_per_page=1',
+            escapeshellarg($post_type),
+            escapeshellarg($slug),
+            escapeshellarg($statuses)
+        ), false);
+        
+        return $result->return_code === 0 ? (int) trim((string) $result->stdout) : 0;
     }
     
     /**

@@ -4,6 +4,8 @@ namespace BuiltNorth\CLI\Commands;
 
 use BuiltNorth\CLI\BaseCommand;
 use BuiltNorth\CLI\Traits\FileOperationsTrait;
+use BuiltNorth\CLI\Utils\StarterFeaturedImages;
+use BuiltNorth\CLI\Utils\StarterOptions;
 use WP_CLI;
 
 /**
@@ -79,6 +81,7 @@ class ConfigureCommand extends BaseCommand {
             WP_CLI::line('  - Activate compass theme (if available)');
             WP_CLI::line('  - Activate all plugins');
             WP_CLI::line('  - Update WordPress settings and permalinks');
+            WP_CLI::line('  - Apply setup/data/options.json (organization, site policies, discussion, reading)');
             
             WP_CLI::line('');
             
@@ -130,6 +133,8 @@ class ConfigureCommand extends BaseCommand {
         
         $steps['Setting up pages'] = 'setup_pages';
         $steps['Cleaning default content'] = 'clean_default_content';
+        $steps['Applying starter options'] = 'apply_starter_options';
+        $steps['Setting featured images'] = 'apply_featured_images';
         
         if (!empty($assoc_args['site-url'])) {
             $steps['Updating URLs'] = 'update_urls';
@@ -252,6 +257,38 @@ class ConfigureCommand extends BaseCommand {
         
         foreach ($import_files as $file) {
             $this->run_wp_command('import ' . escapeshellarg($file) . ' --authors=create');
+        }
+    }
+    
+    /**
+     * Save the starter's setup/data/options.json, with page slugs and the site
+     * name filled in.
+     */
+    private function apply_starter_options($assoc_args) {
+        $options = StarterOptions::read('./' . StarterOptions::FILE);
+        
+        $page_id = static function (string $slug): int {
+            $page = get_page_by_path($slug);
+            
+            return $page ? (int) $page->ID : 0;
+        };
+        
+        foreach (StarterOptions::resolve($options, $page_id, (string) get_option('blogname')) as $name => $value) {
+            update_option((string) $name, $value);
+        }
+    }
+    
+    /**
+     * Give content the featured images in setup/data/featured-images.json.
+     */
+    private function apply_featured_images($assoc_args) {
+        foreach (StarterFeaturedImages::read('./' . StarterFeaturedImages::FILE) as $entry) {
+            $post       = get_page_by_path($entry['slug'], OBJECT, $entry['post_type']);
+            $attachment = get_page_by_path($entry['attachment'], OBJECT, 'attachment');
+            
+            if ($post && $attachment) {
+                set_post_thumbnail($post->ID, $attachment->ID);
+            }
         }
     }
     

@@ -20,6 +20,8 @@ final class ConfigureCommandTest extends CliTestCase
 	private const BASE_TAIL = [
 		'Setting up pages'         => 'setup_pages',
 		'Cleaning default content' => 'clean_default_content',
+		'Applying starter options' => 'apply_starter_options',
+		'Setting featured images'  => 'apply_featured_images',
 	];
 
 	public function test_default_steps_include_media_and_content_in_order(): void
