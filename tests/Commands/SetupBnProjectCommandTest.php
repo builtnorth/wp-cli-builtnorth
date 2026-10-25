@@ -98,6 +98,21 @@ final class SetupBnProjectCommandTest extends CliTestCase
 		], $config);
 	}
 
+	public function test_image_tokens_php_is_valid_php_using_the_token_pattern(): void
+	{
+		$php = SetupBnProjectCommand::image_tokens_php();
+
+		$file = tempnam(sys_get_temp_dir(), 'tokens');
+		file_put_contents($file, "<?php\n" . $php);
+		exec('php -l ' . escapeshellarg($file) . ' 2>&1', $output, $code);
+		unlink($file);
+
+		$this->assertSame(0, $code, implode("\n", $output));
+		$this->assertStringContainsString(var_export(\BuiltNorth\CLI\Utils\StarterImageTokens::PATTERN, true), $php);
+		$this->assertStringContainsString(var_export(\BuiltNorth\CLI\Utils\StarterImageTokens::ID_PATTERN, true), $php);
+		$this->assertStringContainsString("\$wpdb->update(", $php);
+	}
+
 	public function test_admin_display_name_is_the_site_name_and_team(): void
 	{
 		$this->assertSame('Acme Co Team', SetupBnProjectCommand::admin_display_name(' Acme Co '));

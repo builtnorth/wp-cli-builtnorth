@@ -5,6 +5,7 @@ namespace BuiltNorth\CLI\Commands;
 use BuiltNorth\CLI\BaseCommand;
 use BuiltNorth\CLI\Traits\FileOperationsTrait;
 use BuiltNorth\CLI\Utils\StarterFeaturedImages;
+use BuiltNorth\CLI\Utils\StarterImageTokens;
 use BuiltNorth\CLI\Utils\StarterOptions;
 use WP_CLI;
 
@@ -135,6 +136,7 @@ class ConfigureCommand extends BaseCommand {
         $steps['Cleaning default content'] = 'clean_default_content';
         $steps['Applying starter options'] = 'apply_starter_options';
         $steps['Setting featured images'] = 'apply_featured_images';
+        $steps['Placing images in content'] = 'apply_image_tokens';
         
         if (!empty($assoc_args['site-url'])) {
             $steps['Updating URLs'] = 'update_urls';
@@ -279,12 +281,51 @@ class ConfigureCommand extends BaseCommand {
     }
     
     /**
+     * The attachment with this slug, attached to a post or not (get_page_by_path
+     * misses attached ones, whose path includes the parent's).
+     */
+    private static function attachment_by_slug(string $slug): ?\WP_Post {
+        $found = get_posts(['post_type' => 'attachment', 'name' => $slug, 'post_status' => 'inherit', 'numberposts' => 1]);
+        
+        return $found ? $found[0] : null;
+    }
+    
+    /**
+     * Replace the {{image:<slug>}} placeholders in every post with the image URLs.
+     */
+    private function apply_image_tokens($assoc_args) {
+        global $wpdb;
+        
+        $like = '%' . $wpdb->esc_like('{{image') . '%';
+        $url_for = static function (string $slug): string {
+            $attachment = self::attachment_by_slug($slug);
+            
+            return $attachment ? (string) wp_get_attachment_url($attachment->ID) : '';
+        };
+        $id_for = static function (string $slug): int {
+            $attachment = self::attachment_by_slug($slug);
+            
+            return $attachment ? (int) $attachment->ID : 0;
+        };
+        
+        foreach ($wpdb->get_col($wpdb->prepare("SELECT ID FROM {$wpdb->posts} WHERE post_content LIKE %s", $like)) as $id) {
+            $content = (string) get_post_field('post_content', (int) $id, 'raw');
+            $updated = StarterImageTokens::replace($content, $url_for, $id_for);
+            
+            if ($updated !== $content) {
+                $wpdb->update($wpdb->posts, ['post_content' => $updated], ['ID' => (int) $id]);
+                clean_post_cache((int) $id);
+            }
+        }
+    }
+    
+    /**
      * Give content the featured images in setup/data/featured-images.json.
      */
     private function apply_featured_images($assoc_args) {
         foreach (StarterFeaturedImages::read('./' . StarterFeaturedImages::FILE) as $entry) {
             $post       = get_page_by_path($entry['slug'], OBJECT, $entry['post_type']);
-            $attachment = get_page_by_path($entry['attachment'], OBJECT, 'attachment');
+            $attachment = self::attachment_by_slug($entry['attachment']);
             
             if ($post && $attachment) {
                 set_post_thumbnail($post->ID, $attachment->ID);

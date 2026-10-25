@@ -5,6 +5,7 @@ namespace BuiltNorth\CLI\Commands;
 use BuiltNorth\CLI\BaseCommand;
 use BuiltNorth\CLI\Traits\FileOperationsTrait;
 use BuiltNorth\CLI\Utils\StarterFeaturedImages;
+use BuiltNorth\CLI\Utils\StarterImageTokens;
 use BuiltNorth\CLI\Utils\StarterOptions;
 use BuiltNorth\CLI\Utils\ThemeRenamer;
 use WP_CLI;
@@ -724,7 +725,8 @@ class SetupBnProjectCommand extends BaseCommand {
         if ($skip_media) {
             WP_CLI::line('Skipping media import (--skip-media)');
         } elseif (is_dir($images_dir)) {
-            $image_extensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+            // json: Lottie animation files for the Lottie block.
+            $image_extensions = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'json'];
             $media_files = [];
             
             foreach ($image_extensions as $ext) {
@@ -767,6 +769,9 @@ class SetupBnProjectCommand extends BaseCommand {
                 }
                 
                 $this->apply_featured_images();
+                
+                // Images inside blocks: {{image:<slug>}} placeholders become URLs.
+                $this->exec('lando wp eval ' . escapeshellarg(self::image_tokens_php()), false);
             }
         }
     }
@@ -785,6 +790,40 @@ class SetupBnProjectCommand extends BaseCommand {
                 WP_CLI::success("Set the featured image of {$entry['slug']}");
             }
         }
+    }
+    
+    /**
+     * PHP (for `wp eval`) that replaces the {{image:<slug>}} placeholders in
+     * every post with the imported image's URL (StarterImageTokens), written
+     * straight to the posts table so the block markup isn't filtered.
+     *
+     * @return string
+     */
+    public static function image_tokens_php() {
+        $pattern    = var_export(StarterImageTokens::PATTERN, true);
+        $id_pattern = var_export(StarterImageTokens::ID_PATTERN, true);
+        
+        return <<<PHP
+global \$wpdb;
+\$like = '%' . \$wpdb->esc_like('{{image') . '%';
+\$attachment = static function (\$slug) { \$found = get_posts(['post_type' => 'attachment', 'name' => \$slug, 'post_status' => 'inherit', 'numberposts' => 1]); return \$found ? \$found[0] : null; };
+foreach (\$wpdb->get_col(\$wpdb->prepare("SELECT ID FROM {\$wpdb->posts} WHERE post_content LIKE %s", \$like)) as \$id) {
+    \$content = (string) get_post_field('post_content', (int) \$id, 'raw');
+    \$updated = (string) preg_replace_callback({$pattern}, static function (\$m) use (\$attachment) {
+        \$a   = \$attachment(\$m[1]);
+        \$url = \$a ? wp_get_attachment_url(\$a->ID) : '';
+        return \$url ? \$url : \$m[0];
+    }, \$content);
+    \$updated = (string) preg_replace_callback({$id_pattern}, static function (\$m) use (\$attachment) {
+        \$a = \$attachment(\$m[1]);
+        return \$a ? (string) \$a->ID : \$m[0];
+    }, \$updated);
+    if (\$updated !== \$content) {
+        \$wpdb->update(\$wpdb->posts, ['post_content' => \$updated], ['ID' => (int) \$id]);
+        clean_post_cache((int) \$id);
+    }
+}
+PHP;
     }
     
     /**

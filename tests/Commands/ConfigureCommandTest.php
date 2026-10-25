@@ -22,6 +22,7 @@ final class ConfigureCommandTest extends CliTestCase
 		'Cleaning default content' => 'clean_default_content',
 		'Applying starter options' => 'apply_starter_options',
 		'Setting featured images'  => 'apply_featured_images',
+		'Placing images in content' => 'apply_image_tokens',
 	];
 
 	public function test_default_steps_include_media_and_content_in_order(): void
