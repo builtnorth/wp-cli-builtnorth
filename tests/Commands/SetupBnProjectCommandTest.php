@@ -98,6 +98,11 @@ final class SetupBnProjectCommandTest extends CliTestCase
 		], $config);
 	}
 
+	public function test_admin_display_name_is_the_site_name_and_team(): void
+	{
+		$this->assertSame('Acme Co Team', SetupBnProjectCommand::admin_display_name(' Acme Co '));
+	}
+
 	public function test_privacy_policy_php_is_valid_php_that_publishes_the_page_once(): void
 	{
 		$php = SetupBnProjectCommand::privacy_policy_php(3);

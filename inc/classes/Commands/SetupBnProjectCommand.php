@@ -430,8 +430,27 @@ class SetupBnProjectCommand extends BaseCommand {
             WP_CLI::error('WordPress installation verification failed');
         }
         
+        // The admin account's public name (author archives, bylines).
+        $display_name = self::admin_display_name((string) $config['sitename_original']);
+        $this->exec(sprintf(
+            'lando wp user update %s --display_name=%s --nickname=%s',
+            escapeshellarg((string) $config['username']),
+            escapeshellarg($display_name),
+            escapeshellarg($display_name)
+        ), false);
+        
         // Configure WordPress
         $this->configure_wordpress($config);
+    }
+    
+    /**
+     * The admin account's display name: "{Site Name} Team".
+     *
+     * @param string $site_name
+     * @return string
+     */
+    public static function admin_display_name($site_name) {
+        return trim($site_name) . ' Team';
     }
     
     /**
