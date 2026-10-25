@@ -1038,15 +1038,15 @@ class SetupBnProjectCommand extends BaseCommand {
                     
                     // Update scripts section
                     if (isset($package_data['scripts'])) {
-                        // Update watch scripts
-                        if (isset($package_data['scripts']['watch:compass-directory'])) {
-                            unset($package_data['scripts']['watch:compass-directory']);
+                        // Point the starter's compass watch/build scripts at the renamed theme
+                        if (isset($package_data['scripts']['watch:compass'])) {
+                            unset($package_data['scripts']['watch:compass']);
                             $package_data['scripts']['watch:' . $theme_name] = 'npm run start -w wp-content/themes/' . $theme_name;
                         }
                         
                         // Update build scripts
-                        if (isset($package_data['scripts']['build:compass-directory'])) {
-                            unset($package_data['scripts']['build:compass-directory']);
+                        if (isset($package_data['scripts']['build:compass'])) {
+                            unset($package_data['scripts']['build:compass']);
                             $package_data['scripts']['build:' . $theme_name] = 'npm run build -w wp-content/themes/' . $theme_name;
                         }
                         
