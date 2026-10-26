@@ -69,24 +69,29 @@ abstract class BaseCommand {
     }
 
     /**
-     * Prefix a command with the caller's PATH.
+     * Prefix a command with the caller's PATH and HOME.
      *
      * WP_CLI::launch() hands child processes PHP's $_ENV, which is empty under
      * the default variables_order (GPCS). The shell then falls back to its own
      * minimal PATH and can't find lando, gh, composer or npm installed in
-     * Homebrew or ~/.lando/bin. getenv() still sees the real PATH.
+     * Homebrew or ~/.lando/bin. Without HOME, tools write their state relative
+     * to the project folder instead (gh left .local/state/gh/device-id in new
+     * projects). getenv() still sees the real values.
      *
      * @param string $command
      * @return string
      */
     protected static function with_path($command) {
-        $path = getenv('PATH');
+        $prefix = '';
 
-        if (!is_string($path) || $path === '') {
-            return $command;
+        foreach (['PATH', 'HOME'] as $name) {
+            $value = getenv($name);
+            if (is_string($value) && $value !== '') {
+                $prefix .= 'export ' . $name . '=' . escapeshellarg($value) . '; ';
+            }
         }
 
-        return 'export PATH=' . escapeshellarg($path) . '; ' . $command;
+        return $prefix . $command;
     }
     
     /**

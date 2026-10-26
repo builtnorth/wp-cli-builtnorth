@@ -149,6 +149,24 @@ final class BaseCommandTest extends CliTestCase
 		$this->assertSame('/opt/example/bin:/usr/bin:/bin', trim((string) $output));
 	}
 
+	public function test_with_path_hands_the_callers_home_to_the_shell(): void
+	{
+		$previous = getenv('HOME');
+		putenv('HOME=/Users/example');
+
+		try {
+			$command = $this->invoke($this->command(), 'with_path', ['echo "$HOME"']);
+		} finally {
+			putenv('HOME=' . $previous);
+		}
+
+		// No HOME in the child (as WP_CLI::launch runs it) would make tools such as gh
+		// write their state into the project folder.
+		$output = shell_exec('env -i /bin/sh -c ' . escapeshellarg($command));
+
+		$this->assertSame('/Users/example', trim((string) $output));
+	}
+
 	private function command(): BaseCommand
 	{
 		return new class () extends BaseCommand {
