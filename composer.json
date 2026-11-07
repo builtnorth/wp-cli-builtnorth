@@ -10,7 +10,7 @@
     }
   ],
   "require": {
-    "php": ">=8.2",
+    "php": ">=8.1",
     "wp-cli/wp-cli": "^2.5"
   },
   "require-dev": {
@@ -39,7 +39,7 @@
     "test:coverage": "phpunit --coverage-html coverage",
     "lint": "phpcs",
     "lint:fix": "phpcbf",
-    "phpcompat": "phpcs -p inc command.php --standard=PHPCompatibility --runtime-set testVersion 8.2-"
+    "phpcompat": "phpcs -p inc command.php --standard=PHPCompatibility --runtime-set testVersion 8.1-"
   },
   "config": {
     "optimize-autoloader": true,
