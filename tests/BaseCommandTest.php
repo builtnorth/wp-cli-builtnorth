@@ -167,6 +167,38 @@ final class BaseCommandTest extends CliTestCase
 		$this->assertSame('/Users/example', trim((string) $output));
 	}
 
+	// ---------------------------------------------------------------------
+	// redact_secrets
+	// ---------------------------------------------------------------------
+
+	/**
+	 * exec() prints the command in debug and error output: passwords must not
+	 * appear there, whether bare or quoted by escapeshellarg (embedded quotes
+	 * included), while the rest of the command stays readable.
+	 */
+	public function test_redact_secrets_hides_every_password_value(): void
+	{
+		$quoted = sprintf(
+			'lando wp core install --url=%s --admin_user=%s --admin_password=%s --admin_email=%s --skip-email',
+			escapeshellarg('https://acme.lndo.site'),
+			escapeshellarg('admin'),
+			escapeshellarg("it's a secret"),
+			escapeshellarg('admin@example.com')
+		);
+
+		$shown = $this->invoke($this->command(), 'redact_secrets', [$quoted]);
+
+		$this->assertSame(
+			"lando wp core install --url='https://acme.lndo.site' --admin_user='admin' --admin_password=*** --admin_email='admin@example.com' --skip-email",
+			$shown
+		);
+
+		$this->assertSame(
+			'wp user create bob bob@example.com --password=*** --role=editor',
+			$this->invoke($this->command(), 'redact_secrets', ['wp user create bob bob@example.com --password=hunter2 --role=editor'])
+		);
+	}
+
 	private function command(): BaseCommand
 	{
 		return new class () extends BaseCommand {

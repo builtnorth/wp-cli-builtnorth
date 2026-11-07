@@ -57,15 +57,31 @@ abstract class BaseCommand {
      * @return array Command result
      */
     protected function exec($command, $exit_on_error = true) {
-        WP_CLI::debug("Executing: $command");
+        $shown = self::redact_secrets($command);
+        WP_CLI::debug("Executing: $shown");
 
         $result = WP_CLI::launch(self::with_path($command), false, true);
         
         if ($exit_on_error && $result->return_code !== 0) {
-            WP_CLI::error("Command failed: $command");
+            WP_CLI::error("Command failed: $shown");
         }
         
         return $result;
+    }
+
+    /**
+     * The command as shown in debug and error output: any --*password= value
+     * (bare, or quoted by escapeshellarg) replaced with ***.
+     *
+     * @param string $command Command to show.
+     * @return string
+     */
+    protected static function redact_secrets($command) {
+        return (string) preg_replace(
+            "/(--[a-z_-]*password=)(?:'[^']*'(?:\\\\''[^']*')*|\\S+)/i",
+            '$1***',
+            (string) $command
+        );
     }
 
     /**
